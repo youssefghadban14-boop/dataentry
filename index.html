@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="C.A.T. Data Entry">
+<title>C.A.T. Data Entry</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{--red:#c31c2a;--navy:#212630;--bg:#ebebe5;--surface:#ffffff;--surface2:#dfe9ee;--border:#b7cfd7;--text:#000000;--muted:#4d5360;--green:#16A34A;--yellow:#D97706}
+  body{font-family:'Arial',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+  /* ── LOGIN ── */
+  #login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;z-index:100}
+  .login-card{background:var(--surface);border:1px solid #d0d0ca;border-radius:16px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+  .login-logo{text-align:center;margin-bottom:28px}
+  .login-logo img{width:120px;height:auto}
+  .login-logo .app-name{font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:10px}
+  .login-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--navy);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:7px}
+  input,select{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:Arial,sans-serif;font-size:16px;font-weight:500;padding:13px 14px;outline:none;-webkit-appearance:none;transition:border-color .2s,box-shadow .2s;margin-bottom:16px}
+  input:focus,select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(195,28,42,.1);background:#fff}
+  .fg{margin-bottom:4px}
+  .login-err{background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:14px;display:none}
+  .btn-primary{width:100%;padding:16px;background:var(--red);border:none;border-radius:12px;color:#fff;font-family:Arial,sans-serif;font-size:16px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;margin-top:4px;transition:background .2s}
+  .btn-primary:active{background:#a01524}
+
+  /* ── MAIN APP ── */
+  #app{display:none;min-height:100vh;background:var(--bg)}
+  .topbar{background:var(--surface);border-bottom:1px solid #d0d0ca;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .topbar-left{display:flex;align-items:center;gap:10px}
+  .topbar-logo{font-size:15px;font-weight:900;color:var(--red);letter-spacing:.02em}
+  .topbar-sub{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .user-chip{background:var(--red);color:white;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700}
+  .sync-dot{width:8px;height:8px;border-radius:50%;background:#ccc;display:inline-block;margin-right:4px}
+  .sync-dot.online{background:var(--green)}
+  .logout-btn{background:none;border:1px solid #d0d0ca;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+
+  /* ── CONTENT ── */
+  .content{padding:16px;max-width:560px;margin:0 auto}
+
+  /* ── CARD ── */
+  .card{background:var(--surface);border:1px solid #d0d0ca;border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+  .card-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .card-title span{font-size:16px}
+
+  /* ── MACHINE INFO ── */
+  .machine-info{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;display:none}
+  .machine-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .info-field strong{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:2px}
+  .info-field span{font-size:14px;font-weight:700;color:var(--navy)}
+  .last-fill{background:#fff8e1;border:1px solid #f0c050;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12px;color:#7a5c00}
+  .last-fill strong{font-weight:800}
+
+  /* ── METER TOGGLE ── */
+  .meter-toggle{display:flex;gap:8px;margin-bottom:14px}
+  .meter-btn{flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:var(--surface2);font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;text-align:center;transition:all .2s}
+  .meter-btn.active{border-color:var(--red);background:var(--red);color:white}
+
+  /* ── ALERTS ── */
+  .alert{border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;font-weight:600;display:none}
+  .alert.error{background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c}
+  .alert.success{background:#dcfce7;border:1px solid #86efac;color:#15803d}
+  .alert.warn{background:#fff8e1;border:1px solid #f0c050;color:#7a5c00}
+  .alert.show{display:block}
+
+  /* ── SUBMIT ── */
+  .submit-btn{width:100%;padding:18px;background:var(--red);border:none;border-radius:14px;color:#fff;font-family:Arial,sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;box-shadow:0 4px 14px rgba(195,28,42,.3);transition:all .2s;margin-top:4px}
+  .submit-btn:active{background:#a01524;transform:translateY(1px)}
+  .submit-btn:disabled{background:#ccc;box-shadow:none;cursor:not-allowed}
+
+  /* ── HISTORY ── */
+  .history-item{border-bottom:1px solid #eee;padding:12px 0}
+  .history-item:last-child{border-bottom:none}
+  .history-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+  .history-fleet{font-weight:800;font-size:14px}
+  .history-qty{font-weight:800;font-size:15px;color:var(--red)}
+  .history-meta{font-size:11px;color:var(--muted)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .badge-blue{background:#dfe9ee;color:var(--navy)}
+  .badge-warn{background:#fff8e1;color:#7a5c00}
+
+  /* ── EMPTY ── */
+  .empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+
+  /* ── SPINNER ── */
+  .spinner-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:12px}
+  .spinner-overlay.show{display:flex}
+  .spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner-msg{font-size:13px;font-weight:700;color:var(--muted)}
+
+  /* ── NOTE REQUIRED ── */
+  .note-required{color:var(--red);font-size:11px;font-weight:700;margin-left:4px;display:none}
+  textarea{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:Arial,sans-serif;font-size:15px;padding:13px 14px;outline:none;resize:vertical;min-height:80px;transition:border-color .2s;margin-bottom:4px}
+  textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(195,28,42,.1);background:#fff}
+</style>
+</head>
+<body>
+
+<!-- SPINNER -->
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner"></div>
+  <div class="spinner-msg" id="spinner-msg">Loading...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div style="font-size:42px;font-weight:900;color:var(--red);letter-spacing:-.02em">C.A.T.</div>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.05em;margin-top:4px">EST. 1937</div>
+      <div class="app-name">Data Entry</div>
+    </div>
+    <div class="login-title">🔐 Operator login</div>
+    <div class="fg">
+      <label>Select your name</label>
+      <select id="login-user"><option value="">— Select your name —</option></select>
+    </div>
+    <div class="fg">
+      <label>Password</label>
+      <input type="password" id="login-pw" placeholder="Enter your password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-primary" onclick="doLogin()">Login →</button>
+    <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px">Contact your supervisor if you cannot find your name.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div>
+        <div class="topbar-logo">C.A.T.</div>
+        <div class="topbar-sub">Data Entry</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span><span class="sync-dot" id="sync-dot"></span><span id="sync-label" style="font-size:11px;color:var(--muted)">Offline</span></span>
+      <div class="user-chip" id="user-chip">—</div>
+      <button class="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- FORM CARD -->
+    <div class="card">
+      <div class="card-title"><span>⛽</span> Record fuel issue</div>
+      <div class="alert" id="form-alert"></div>
+
+      <!-- PROJECT -->
+      <div class="fg">
+        <label>Project *</label>
+        <select id="f-project" onchange="onProjectChange()"><option value="">— Select project —</option></select>
+      </div>
+
+      <!-- FLEET NO -->
+      <div class="fg">
+        <label>Fleet / Machine No *</label>
+        <input type="text" id="f-fleet-input" placeholder="Type fleet no to search..." oninput="filterFleet()" autocomplete="off" autocorrect="off" spellcheck="false">
+        <div id="f-fleet-results" style="background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;display:none;margin-top:4px;margin-bottom:8px"></div>
+        <input type="hidden" id="f-fleet-no">
+      </div>
+
+      <!-- MACHINE INFO CARD -->
+      <div class="machine-info" id="machine-info">
+        <div class="machine-info-grid">
+          <div class="info-field"><strong>Type</strong><span id="mi-type">—</span></div>
+          <div class="info-field"><strong>Make / Model</strong><span id="mi-make">—</span></div>
+          <div class="info-field"><strong>Tank capacity</strong><span id="mi-cap">—</span></div>
+          <div class="info-field"><strong>Meter type</strong><span id="mi-meter">—</span></div>
+        </div>
+        <div class="last-fill" id="mi-last" style="display:none"></div>
+      </div>
+
+      <!-- METER READING -->
+      <div class="fg" id="meter-section" style="display:none">
+        <label>Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
+        <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()">
+        <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
+      </div>
+
+      <!-- QUANTITY -->
+      <div class="fg" id="qty-section" style="display:none">
+        <label>Quantity (L) *</label>
+        <input type="number" id="f-qty" min="0" step="0.5" placeholder="0" oninput="onQtyInput()">
+        <div id="qty-warn" style="font-size:12px;color:var(--yellow);margin-top:4px;display:none"></div>
+      </div>
+
+      <!-- TRANSACTION DATE -->
+      <div class="fg" id="txdate-section" style="display:none">
+        <label>Transaction date *</label>
+        <input type="date" id="f-tx-date" max="" style="margin-bottom:4px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? (defaults to today)</div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="fg" id="notes-section" style="display:none">
+        <label>Notes <span class="note-required" id="note-required">* Required</span></label>
+        <textarea id="f-notes" placeholder="Optional — required if quantity exceeds tank capacity" oninput="this.style.borderColor='';this.style.background=''"></textarea>
+      </div>
+
+      <!-- SUBMIT -->
+      <button class="submit-btn" id="submit-btn" onclick="doSubmit()" style="display:none" disabled>Record fuel issue</button>
+    </div>
+
+    <!-- TODAY'S LOG -->
+    <div class="card">
+      <div class="card-title"><span>📋</span> My entries today</div>
+      <div id="history-list"><div class="empty">No entries yet today.</div></div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="admin-panel" style="display:none">
+
+      <!-- USER MANAGEMENT -->
+      <div class="card">
+        <div class="card-title"><span>👥</span> User management
+          <button onclick="openAddUser()" style="margin-left:auto;padding:6px 14px;background:var(--red);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Add user</button>
+        </div>
+        <div id="admin-alert" class="alert"></div>
+        <div id="user-list"><div class="empty">No users yet.</div></div>
+      </div>
+
+      <!-- DOWNLOAD -->
+      <div class="card">
+        <div class="card-title"><span>📥</span> Download data</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="dlTransactions()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">⬇ Download All Transactions (CSV)</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ADD USER MODAL -->
+    <div id="m-user" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px">
+      <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+        <div style="font-size:15px;font-weight:800;margin-bottom:18px" id="u-modal-title">Add user</div>
+        <input type="hidden" id="u-edit-id">
+        <div class="fg"><label>Full name *</label><input id="u-name" type="text" placeholder="e.g. Ahmed Al-Rashid"></div>
+        <div class="fg"><label>Employee ID</label><input id="u-empid" type="text" placeholder="e.g. EMP-001"></div>
+        <div class="fg"><label>Role *</label>
+          <select id="u-role">
+            <option value="data_entry">Data Entry</option>
+            <option value="pmv_admin">PMV Admin</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="fg"><label>Password *</label><input id="u-pw-new" type="text" placeholder="Set a password"></div>
+        <div class="fg"><label>Status</label>
+          <select id="u-status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button onclick="closeUserModal()" style="flex:1;padding:12px;background:#f4f4f2;border:1px solid #d0d0ca;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
+          <button onclick="saveUser()" style="flex:2;padding:12px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer" id="u-save-btn">Save user</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const GS_URL = 'https://script.google.com/macros/s/AKfycbxyMnSRej_KLHlcuqNmoqMzxyVHCdOVM8tNEjRgwBNFGGcxSmIruFFExWjRlH_byhm2/exec';
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let S = { user: null, projects: [], fleet: [], lastReading: {}, users: [], todayLog: [] };
+let selectedFleet = null;
+
+// ── QATAR TIME ────────────────────────────────────────────────────────────────
+function qNow() { return new Date(new Date().getTime() + (3 * 60 * 60 * 1000)) }
+function qDate() { const d=qNow(); return d.toISOString().slice(0,10) }
+function qDateTime() { return qNow().toISOString().slice(0,16) }
+function fmt(d) {
+  try {
+    const dt = new Date(new Date(d).getTime() + (3*60*60*1000));
+    return dt.toISOString().slice(0,10).split('-').reverse().join('/') + ' ' + dt.toISOString().slice(11,16);
+  } catch(e) { return d }
+}
+function rid() {
+  const d=qNow();
+  const yy=String(d.getUTCFullYear()).slice(2),mm=String(d.getUTCMonth()+1).padStart(2,'0'),dd=String(d.getUTCDate()).padStart(2,'0');
+  const hh=String(d.getUTCHours()).padStart(2,'0'),mi=String(d.getUTCMinutes()).padStart(2,'0'),ss=String(d.getUTCSeconds()).padStart(2,'0');
+  return 'DE-'+yy+mm+dd+'-'+hh+mi+ss+'-'+String(Math.floor(Math.random()*90)+10);
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(params) {
+  const url = GS_URL + '?' + new URLSearchParams(params).toString();
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// ── SPINNER ───────────────────────────────────────────────────────────────────
+function spin(msg) { document.getElementById('spinner-msg').textContent = msg||'Loading...'; document.getElementById('spinner').classList.add('show') }
+function unspin() { document.getElementById('spinner').classList.remove('show') }
+
+// ── ONLINE CHECK ──────────────────────────────────────────────────────────────
+function setOnline(v) {
+  document.getElementById('sync-dot').className = 'sync-dot' + (v?' online':'');
+  document.getElementById('sync-label').textContent = v ? 'Online' : 'Offline';
+}
+
+// ── SHOW ALERT ────────────────────────────────────────────────────────────────
+function showAlert(type, msg) {
+  const el = document.getElementById('form-alert');
+  el.className = 'alert ' + type + ' show';
+  el.textContent = msg;
+}
+function clearAlert() {
+  const el = document.getElementById('form-alert');
+  el.className = 'alert';
+  el.textContent = '';
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function loadLoginUsers() {
+  try {
+    const users = await api({ action: 'getLoginUsers' });
+    const sel = document.getElementById('login-user');
+    sel.innerHTML = '<option value="">— Select your name —</option>' +
+      users.map(u => `<option value="${u.id}" data-pw="${u.password}" data-name="${u.name}" data-role="${u.role||'data_entry'}">${u.name} (${u.role==='admin'?'Admin':u.role==='pmv_admin'?'PMV Admin':'Data Entry'})</option>`).join('');
+    setOnline(true);
+  } catch(e) {
+    setOnline(false);
+  }
+}
+
+function doLogin() {
+  const sel = document.getElementById('login-user');
+  const opt = sel.options[sel.selectedIndex];
+  const pw = document.getElementById('login-pw').value;
+  const errEl = document.getElementById('login-err');
+  if (!sel.value) { errEl.textContent = 'Please select your name.'; errEl.style.display = 'block'; return }
+  if (!pw) { errEl.textContent = 'Please enter your password.'; errEl.style.display = 'block'; return }
+  if (pw !== opt.dataset.pw) { errEl.textContent = 'Incorrect password. Try again.'; errEl.style.display = 'block'; return }
+  errEl.style.display = 'none';
+  S.user = { id: sel.value, name: opt.dataset.name, role: opt.dataset.role };
+  localStorage.setItem('de_session', JSON.stringify(S.user));
+  startApp();
+}
+
+function doLogout() {
+  localStorage.removeItem('de_session');
+  S.user = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-pw').value = '';
+}
+
+// ── START APP ─────────────────────────────────────────────────────────────────
+async function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-chip').textContent = S.user.name;
+  spin('Loading data...');
+  try {
+    const data = await api({ action: 'getData' });
+    S.projects = data.projects || [];
+    S.fleet = data.fleet || [];
+    S.lastReading = data.lastReading || {};
+    S.users = data.users || [];
+    setOnline(true);
+    populateProjects();
+    renderHistory();
+    buildUI();
+  } catch(e) {
+    setOnline(false);
+    showAlert('error', 'Could not load data. Check your connection.');
+  }
+  unspin();
+}
+
+// ── POPULATE PROJECTS ─────────────────────────────────────────────────────────
+function populateProjects() {
+  const sel = document.getElementById('f-project');
+  sel.innerHTML = '<option value="">— Select project —</option>' +
+    S.projects.map(p => `<option value="${p.name}">${p.code ? p.code + ' — ' : ''}${p.name}</option>`).join('');
+}
+
+function onProjectChange() {
+  resetMachine();
+  document.getElementById('f-fleet-input').value = '';
+  document.getElementById('f-fleet-no').value = '';
+}
+
+// ── FLEET SEARCH ──────────────────────────────────────────────────────────────
+function filterFleet() {
+  const q = document.getElementById('f-fleet-input').value.toLowerCase().trim();
+  const res = document.getElementById('f-fleet-results');
+  if (!q) { res.style.display = 'none'; return }
+  const matches = S.fleet.filter(f =>
+    f.fleetNo.toLowerCase().includes(q) ||
+    (f.ftype||'').toLowerCase().includes(q) ||
+    (f.make||'').toLowerCase().includes(q)
+  ).slice(0, 50);
+  if (!matches.length) {
+    res.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">No match found.</div>';
+    res.style.display = 'block';
+    return;
+  }
+  res.innerHTML = matches.map(f => `
+    <div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0ee;font-size:14px"
+      onmousedown="pickFleet('${f.fleetNo}')"
+      ontouchstart="pickFleet('${f.fleetNo}')"
+      onmouseover="this.style.background='#f4f4f2'" onmouseout="this.style.background=''">
+      <strong>${f.fleetNo}</strong> &nbsp;
+      <span style="color:var(--muted);font-size:12px">${f.ftype}${f.make?' · '+f.make:''}${f.model?' '+f.model:''}</span>
+    </div>`).join('');
+  res.style.display = 'block';
+}
+
+function pickFleet(fleetNo) {
+  const f = S.fleet.find(x => x.fleetNo === fleetNo);
+  if (!f) return;
+  selectedFleet = f;
+  document.getElementById('f-fleet-input').value = fleetNo;
+  document.getElementById('f-fleet-no').value = fleetNo;
+  document.getElementById('f-fleet-results').style.display = 'none';
+  showMachineInfo(f);
+}
+
+function resetMachine() {
+  selectedFleet = null;
+  document.getElementById('machine-info').style.display = 'none';
+  document.getElementById('meter-section').style.display = 'none';
+  document.getElementById('qty-section').style.display = 'none';
+  document.getElementById('txdate-section').style.display = 'none';
+  document.getElementById('notes-section').style.display = 'none';
+  document.getElementById('submit-btn').style.display = 'none';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('f-meter').value = '';
+  document.getElementById('f-qty').value = '';
+  document.getElementById('f-notes').value = '';
+  document.getElementById('f-tx-date').value = '';
+  document.getElementById('meter-warn').style.display = 'none';
+  document.getElementById('qty-warn').style.display = 'none';
+  document.getElementById('note-required').style.display = 'none';
+  clearAlert();
+}
+
+function showMachineInfo(f) {
+  const isOdo = ['odometer','odo','km','kms','kilometer','kilometers'].includes((f.meterType||'').toLowerCase());
+  const unit = isOdo ? 'km' : 'hrs';
+  document.getElementById('mi-type').textContent = f.ftype || '—';
+  document.getElementById('mi-make').textContent = [f.make, f.model].filter(Boolean).join(' ') || '—';
+  document.getElementById('mi-cap').textContent = f.tankCap ? f.tankCap.toLocaleString() + ' L' : 'Not specified';
+  document.getElementById('mi-meter').textContent = isOdo ? 'Odometer (km)' : 'Hourmeter (hrs)';
+  document.getElementById('meter-unit-label').textContent = '(' + unit + ')';
+  document.getElementById('f-meter').placeholder = '0 ' + unit;
+  // Last reading
+  const last = S.lastReading[f.fleetNo];
+  const lastEl = document.getElementById('mi-last');
+  if (last && last.reading) {
+    lastEl.innerHTML = `📅 Last fill: <strong>${fmt(last.date)}</strong> &nbsp;·&nbsp; Meter: <strong>${last.reading.toLocaleString()} ${unit}</strong>`;
+    lastEl.style.display = 'block';
+  } else {
+    lastEl.innerHTML = '📅 No previous fill recorded for this machine.';
+    lastEl.style.display = 'block';
+  }
+  document.getElementById('machine-info').style.display = 'block';
+  document.getElementById('meter-section').style.display = 'block';
+  document.getElementById('qty-section').style.display = 'block';
+  document.getElementById('notes-section').style.display = 'block';
+  // Set transaction date default to today Qatar time
+  const txDateEl = document.getElementById('f-tx-date');
+  txDateEl.value = qDate();
+  txDateEl.max = qDate(); // Cannot be in the future
+  document.getElementById('txdate-section').style.display = 'block';
+  document.getElementById('submit-btn').style.display = 'block';
+  document.getElementById('submit-btn').disabled = false;
+}
+
+// ── VALIDATIONS ───────────────────────────────────────────────────────────────
+function onMeterInput() {
+  if (!selectedFleet) return;
+  const val = parseFloat(document.getElementById('f-meter').value) || 0;
+  const last = S.lastReading[selectedFleet.fleetNo];
+  const warnEl = document.getElementById('meter-warn');
+  if (last && last.reading && val > 0 && val <= last.reading) {
+    warnEl.textContent = `⚠️ Reading must be higher than last recorded: ${last.reading.toLocaleString()}`;
+    warnEl.style.display = 'block';
+    document.getElementById('f-meter').style.borderColor = 'var(--red)';
+  } else {
+    warnEl.style.display = 'none';
+    document.getElementById('f-meter').style.borderColor = '';
+  }
+}
+
+function onQtyInput() {
+  if (!selectedFleet) return;
+  const qty = parseFloat(document.getElementById('f-qty').value) || 0;
+  const cap = selectedFleet.tankCap || 0;
+  const warnEl = document.getElementById('qty-warn');
+  const noteReq = document.getElementById('note-required');
+  if (cap > 0 && qty > cap) {
+    warnEl.textContent = `⚠️ Quantity ${qty.toLocaleString()} L exceeds tank capacity of ${cap.toLocaleString()} L. A note is required.`;
+    warnEl.style.display = 'block';
+    noteReq.style.display = 'inline';
+    document.getElementById('f-notes').placeholder = 'Required — explain why quantity exceeds tank capacity';
+    document.getElementById('f-notes').style.borderColor = 'var(--red)';
+  } else {
+    warnEl.style.display = 'none';
+    noteReq.style.display = 'none';
+    document.getElementById('f-notes').placeholder = 'Optional — required if quantity exceeds tank capacity';
+    document.getElementById('f-notes').style.borderColor = '';
+  }
+}
+
+// ── SUBMIT ────────────────────────────────────────────────────────────────────
+async function doSubmit() {
+  clearAlert();
+  const project = document.getElementById('f-project').value;
+  const fleetNo = document.getElementById('f-fleet-no').value;
+  const meter = parseFloat(document.getElementById('f-meter').value) || 0;
+  const qty = parseFloat(document.getElementById('f-qty').value) || 0;
+  const notes = document.getElementById('f-notes').value.trim();
+
+  // Validations
+  if (!project) { showAlert('error', 'Please select a project.'); return }
+  if (!fleetNo || !selectedFleet) { showAlert('error', 'Please select a machine from the list.'); return }
+  if (!meter || meter <= 0) { showAlert('error', 'Please enter the meter reading.'); return }
+
+  // Check meter is higher than last
+  const last = S.lastReading[fleetNo];
+  if (last && last.reading && meter <= last.reading) {
+    showAlert('error', `Meter reading must be higher than the last recorded reading (${last.reading.toLocaleString()}).`);
+    document.getElementById('f-meter').focus();
+    return;
+  }
+
+  if (!qty || qty <= 0) { showAlert('error', 'Please enter the quantity.'); return }
+
+  // Check capacity
+  const cap = selectedFleet.tankCap || 0;
+  let warning = '';
+  if (cap > 0 && qty > cap) {
+    if (!notes) {
+      showAlert('error', `Quantity exceeds tank capacity (${cap.toLocaleString()} L). You must enter a note explaining why.`);
+      document.getElementById('f-notes').focus();
+      document.getElementById('f-notes').style.borderColor = 'var(--red)';
+      return;
+    }
+    const ok = confirm(`⚠️ Quantity ${qty.toLocaleString()} L exceeds tank capacity of ${cap.toLocaleString()} L.\n\nNote: ${notes}\n\nDo you want to proceed?`);
+    if (!ok) return;
+    warning = `EXCESS: ${qty}L > capacity ${cap}L`;
+  }
+
+  const isOdo = ['odometer','odo','km','kms','kilometer','kilometers'].includes((selectedFleet.meterType||'').toLowerCase());
+
+  const txDate = document.getElementById('f-tx-date').value;
+  if (!txDate) { showAlert('error', 'Please select the transaction date.'); return }
+
+  const tx = {
+    id: rid(),
+    entryDate: qDateTime(),   // when this record was entered into the system
+    txDate: txDate,           // when the fuel was actually issued
+    operator: S.user.name,
+    project,
+    fleetNo,
+    ftype: selectedFleet.ftype || '',
+    make: selectedFleet.make || '',
+    model: selectedFleet.model || '',
+    meterReading: meter,
+    meterUnit: isOdo ? 'km' : 'hrs',
+    qty,
+    notes,
+    warning
+  };
+
+  spin('Saving...');
+  document.getElementById('submit-btn').disabled = true;
+  try {
+    await api({ action: 'saveTransaction', ...tx });
+    // Update lastReading in memory
+    S.lastReading[fleetNo] = { reading: meter, date: tx.date };
+    // Add to today's log
+    S.todayLog.unshift(tx);
+    renderHistory();
+    // Reset form
+    resetForm();
+    showAlert('success', `✓ Recorded — ${qty.toLocaleString()} L to ${fleetNo} on ${project} (transaction date: ${txDate})`);
+  } catch(e) {
+    showAlert('error', 'Save failed. Please check your connection and try again.');
+    document.getElementById('submit-btn').disabled = false;
+  }
+  unspin();
+}
+
+function resetForm() {
+  document.getElementById('f-project').value = '';
+  document.getElementById('f-fleet-input').value = '';
+  document.getElementById('f-fleet-no').value = '';
+  document.getElementById('f-meter').value = '';
+  document.getElementById('f-qty').value = '';
+  document.getElementById('f-notes').value = '';
+  document.getElementById('f-tx-date').value = '';
+  document.getElementById('f-meter').style.borderColor = '';
+  document.getElementById('f-qty').style.borderColor = '';
+  document.getElementById('f-notes').style.borderColor = '';
+  resetMachine();
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  const today = qDate();
+  const todayEntries = S.todayLog.filter(t => t.date && t.date.slice(0,10) === today);
+  if (!todayEntries.length) {
+    el.innerHTML = '<div class="empty">No entries yet today.</div>';
+    return;
+  }
+  el.innerHTML = todayEntries.map(t => `
+    <div class="history-item">
+      <div class="history-top">
+        <div>
+          <div class="history-fleet">${t.fleetNo} <span class="badge badge-blue">${t.ftype||''}</span></div>
+          <div class="history-meta">Transaction: ${t.txDate||t.date||''} · Entered: ${fmt(t.entryDate||t.date||'')} · ${t.project}</div>
+        </div>
+        <div class="history-qty">${(t.qty||0).toLocaleString()} L</div>
+      </div>
+      <div class="history-meta">Meter: ${(t.meterReading||0).toLocaleString()} ${t.meterUnit||'hrs'}${t.notes?' · '+t.notes:''}${t.warning?' <span class="badge badge-warn">⚠️ Excess</span>':''}</div>
+    </div>`).join('');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+// ── ROLE HELPERS ─────────────────────────────────────────────────────────────
+function isAdmin() { return S.user?.role === 'admin' }
+function canEntry() { return ['admin','data_entry','pmv_admin'].includes(S.user?.role) }
+
+// ── BUILD UI BASED ON ROLE ────────────────────────────────────────────────────
+function buildUI() {
+  const role = S.user?.role;
+  // Show/hide form card for data entry roles
+  const formCard = document.querySelector('.card');
+  // Admin panel
+  document.getElementById('admin-panel').style.display = isAdmin() ? 'block' : 'none';
+  // Data entry form — visible for all roles, Admin included
+  if (isAdmin()) renderAdminUsers();
+}
+
+// ── ADMIN: RENDER USERS ───────────────────────────────────────────────────────
+function renderAdminUsers() {
+  const el = document.getElementById('user-list');
+  if (!S.users || !S.users.length) { el.innerHTML = '<div class="empty">No users yet.</div>'; return }
+  el.innerHTML = S.users.map(u => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee">
+      <div>
+        <div style="font-weight:700;font-size:14px">${u.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${u.empId||''} · ${u.role==='admin'?'Admin':u.role==='pmv_admin'?'PMV Admin':'Data Entry'} · ${u.status}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="editUser('${u.id}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
+        <button onclick="delUser('${u.id}','${u.name}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:#fee2e2;color:#b91c1c">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── ADMIN: ADD/EDIT USER ──────────────────────────────────────────────────────
+function openAddUser() {
+  if (!isAdmin()) { alert('Admin only.'); return }
+  document.getElementById('u-edit-id').value = '';
+  document.getElementById('u-modal-title').textContent = 'Add user';
+  document.getElementById('u-save-btn').textContent = 'Save user';
+  document.getElementById('u-name').value = '';
+  document.getElementById('u-empid').value = '';
+  document.getElementById('u-role').value = 'data_entry';
+  document.getElementById('u-pw-new').value = '';
+  document.getElementById('u-status').value = 'Active';
+  document.getElementById('m-user').style.display = 'flex';
+}
+function editUser(id) {
+  if (!isAdmin()) return;
+  const u = S.users.find(x => x.id === id); if (!u) return;
+  document.getElementById('u-edit-id').value = id;
+  document.getElementById('u-modal-title').textContent = 'Edit user';
+  document.getElementById('u-save-btn').textContent = 'Update user';
+  document.getElementById('u-name').value = u.name;
+  document.getElementById('u-empid').value = u.empId || '';
+  document.getElementById('u-role').value = u.role || 'data_entry';
+  document.getElementById('u-pw-new').value = u.password || '';
+  document.getElementById('u-status').value = u.status || 'Active';
+  document.getElementById('m-user').style.display = 'flex';
+}
+function closeUserModal() { document.getElementById('m-user').style.display = 'none' }
+async function saveUser() {
+  if (!isAdmin()) return;
+  const editId = document.getElementById('u-edit-id').value;
+  const name = document.getElementById('u-name').value.trim();
+  const empId = document.getElementById('u-empid').value.trim();
+  const role = document.getElementById('u-role').value;
+  const pw = document.getElementById('u-pw-new').value.trim();
+  const status = document.getElementById('u-status').value;
+  if (!name) { alert('Name is required.'); return }
+  if (!pw) { alert('Password is required.'); return }
+  const id = editId || ('USR-' + Date.now());
+  const userData = { id, name, empId, role, password: pw, status };
+  spin('Saving user...');
+  try {
+    await api({ action: 'saveUser', ...userData });
+    if (editId) { const idx = S.users.findIndex(x => x.id === editId); if (idx >= 0) S.users[idx] = userData }
+    else S.users.push(userData);
+    closeUserModal();
+    renderAdminUsers();
+  } catch(e) { alert('Save failed: ' + e.message) }
+  unspin();
+}
+async function delUser(id, name) {
+  if (!isAdmin()) return;
+  if (!confirm('Delete user "' + name + '"? This cannot be undone.')) return;
+  spin('Deleting...');
+  try {
+    await api({ action: 'deleteUser', id });
+    S.users = S.users.filter(x => x.id !== id);
+    renderAdminUsers();
+  } catch(e) { alert('Delete failed: ' + e.message) }
+  unspin();
+}
+
+// ── DOWNLOAD CSV ──────────────────────────────────────────────────────────────
+async function dlTransactions() {
+  if (!isAdmin()) return;
+  spin('Preparing download...');
+  try {
+    const data = await api({ action: 'getTransactions' });
+    const rows = data.transactions || [];
+    if (!rows.length) { alert('No transactions to download.'); unspin(); return }
+    const headers = ['ID','Entry Date/Time','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning'];
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => '"' + String(r[h]||'').replace(/"/g,'""') + '"').join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'CAT_DataEntry_' + qDate() + '.csv'; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Download failed: ' + e.message) }
+  unspin();
+}
+
+window.addEventListener('load', async () => {
+  // Try session restore
+  const saved = localStorage.getItem('de_session');
+  if (saved) {
+    try {
+      S.user = JSON.parse(saved);
+      await startApp();
+      return;
+    } catch(e) { localStorage.removeItem('de_session') }
+  }
+  // Load login users
+  loadLoginUsers();
+});
+
+// Close fleet dropdown on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#f-fleet-input') && !e.target.closest('#f-fleet-results')) {
+    document.getElementById('f-fleet-results').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
