@@ -193,6 +193,8 @@
         <div class="machine-info-grid">
           <div class="info-field"><strong>Type</strong><span id="mi-type">—</span></div>
           <div class="info-field"><strong>Make / Model</strong><span id="mi-make">—</span></div>
+          <div class="info-field"><strong>Owner</strong><span id="mi-owner">—</span></div>
+          <div class="info-field"><strong>Year</strong><span id="mi-year">—</span></div>
           <div class="info-field"><strong>Tank capacity</strong><span id="mi-cap">—</span></div>
           <div class="info-field"><strong>Meter type</strong><span id="mi-meter">—</span></div>
         </div>
@@ -302,6 +304,7 @@
         <div class="fg"><label>Type *</label><input id="eq-type" type="text" placeholder="e.g. EXCAVATOR"></div>
         <div class="fg"><label>Make</label><input id="eq-make" type="text" placeholder="e.g. CATERPILLAR"></div>
         <div class="fg"><label>Model</label><input id="eq-model" type="text" placeholder="e.g. 320"></div>
+        <div class="fg"><label>Year</label><input id="eq-year" type="number" min="1990" max="2030" placeholder="e.g. 2020"></div>
         <div class="fg"><label>Tank Capacity (L)</label><input id="eq-cap" type="number" min="0" placeholder="e.g. 400"></div>
         <div class="fg"><label>Meter Type</label><select id="eq-mtype"><option value="hourmeter">Hourmeter (hrs)</option><option value="odometer">Odometer (km)</option></select></div>
         <div class="fg"><label>Owner *</label>
@@ -543,6 +546,8 @@ function showMachineInfo(f) {
   const unit = isOdo ? 'km' : 'hrs';
   document.getElementById('mi-type').textContent = f.ftype || '—';
   document.getElementById('mi-make').textContent = [f.make, f.model].filter(Boolean).join(' ') || '—';
+  document.getElementById('mi-owner').textContent = f.owner || 'C.A.T.';
+  document.getElementById('mi-year').textContent = f.year || '—';
   document.getElementById('mi-cap').textContent = f.tankCap ? f.tankCap.toLocaleString() + ' L' : 'Not specified';
   document.getElementById('mi-meter').textContent = isOdo ? 'Odometer (km)' : 'Hourmeter (hrs)';
   document.getElementById('meter-unit-label').textContent = '(' + unit + ')';
@@ -921,7 +926,7 @@ function renderAdminEquipment() {
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee">
       <div>
         <div style="font-weight:700;font-size:14px">${f.fleetNo} <span style="font-weight:400;color:var(--muted);font-size:12px">${f.ftype||''}</span></div>
-        <div style="font-size:12px;color:var(--muted)">${[f.make,f.model].filter(Boolean).join(' ')||'—'} · ${f.owner||'C.A.T.'} · Cap: ${f.tankCap||'—'} L · ${f.meterType==='odometer'?'Odo':'Hour'}</div>
+        <div style="font-size:12px;color:var(--muted)">${[f.make,f.model].filter(Boolean).join(' ')||'—'} · ${f.year||'—'} · ${f.owner||'C.A.T.'} · Cap: ${f.tankCap||'—'} L · ${f.meterType==='odometer'?'Odo':'Hour'}</div>
       </div>
       <button onclick="editEquipment('${f.fleetNo}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
     </div>`).join('');
@@ -936,6 +941,7 @@ function openAddEquipment() {
   document.getElementById('eq-type').value = '';
   document.getElementById('eq-make').value = '';
   document.getElementById('eq-model').value = '';
+  document.getElementById('eq-year').value = '';
   document.getElementById('eq-cap').value = '';
   document.getElementById('eq-mtype').value = 'hourmeter';
   document.getElementById('eq-owner').value = 'C.A.T.';
@@ -952,6 +958,7 @@ function editEquipment(fleetNo) {
   document.getElementById('eq-type').value = f.ftype || '';
   document.getElementById('eq-make').value = f.make || '';
   document.getElementById('eq-model').value = f.model || '';
+  document.getElementById('eq-year').value = f.year || '';
   document.getElementById('eq-cap').value = f.tankCap || '';
   document.getElementById('eq-mtype').value = f.meterType || 'hourmeter';
   document.getElementById('eq-owner').value = f.owner || 'C.A.T.';
@@ -969,6 +976,7 @@ async function saveEquipment() {
     fleetNo, ftype,
     make: document.getElementById('eq-make').value.trim(),
     model: document.getElementById('eq-model').value.trim(),
+    year: document.getElementById('eq-year').value || '',
     tankCap: parseFloat(document.getElementById('eq-cap').value) || 0,
     meterType: document.getElementById('eq-mtype').value,
     owner: document.getElementById('eq-owner').value,
