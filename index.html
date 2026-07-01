@@ -274,7 +274,9 @@
       <div class="card">
         <div class="card-title"><span>📥</span> Download data</div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <button onclick="dlTransactions()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">⬇ Download All Transactions (Excel)</button>
+          <button onclick="dlTransactions()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">⬇ Download All Transactions (Excel)</button>
+          <button onclick="dlEquipment()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">⬇ Download All Equipment (Excel)</button>
+          <button onclick="dlProjects()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">⬇ Download All Projects (Excel)</button>
         </div>
       </div>
 
@@ -732,6 +734,33 @@ function renderHistory() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+async function dlEquipment() {
+  if (!isAdmin() && S.user?.role !== 'pmv_admin') return;
+  if (!S.fleet.length) { alert('No equipment to download.'); return }
+  const headers = ['Fleet No','Type','Make','Model','Year','Tank Capacity (L)','Meter Type','Owner','Status'];
+  const wsData = [headers, ...S.fleet.map(f => [
+    f.fleetNo||'', f.ftype||'', f.make||'', f.model||'',
+    f.year||'', f.tankCap||0, f.meterType||'', f.owner||'C.A.T.', f.status||''
+  ])];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length, 14) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Equipment');
+  XLSX.writeFile(wb, 'CAT_Equipment_' + qDate() + '.xlsx');
+}
+
+async function dlProjects() {
+  if (!isAdmin()) return;
+  if (!S.projects.length) { alert('No projects to download.'); return }
+  const headers = ['Project Code','Project Name','Status'];
+  const wsData = [headers, ...S.projects.map(p => [p.code||'', p.name||'', p.status||''])];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length, 20) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Projects');
+  XLSX.writeFile(wb, 'CAT_Projects_' + qDate() + '.xlsx');
+}
+
 // ── ROLE HELPERS ─────────────────────────────────────────────────────────────
 function isAdmin() { return S.user?.role === 'admin' }
 function canEntry() { return ['admin','data_entry','pmv_admin'].includes(S.user?.role) }
