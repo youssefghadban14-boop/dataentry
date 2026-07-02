@@ -249,6 +249,7 @@
           <button onclick="openAddUser()" style="margin-left:auto;padding:6px 14px;background:var(--red);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Add user</button>
         </div>
         <div id="admin-alert" class="alert"></div>
+        <input type="text" id="user-search" placeholder="Search by name or Employee ID..." oninput="renderAdminUsers()" style="margin-bottom:12px;font-size:14px">
         <div id="user-list"><div class="empty">No users yet.</div></div>
       </div>
 
@@ -442,18 +443,40 @@ function doLogout() {
   document.getElementById('login-pw').value = '';
 }
 
+// ── LOCALSTORAGE CACHE HELPERS ───────────────────────────────────────────────
+const FLEET_CACHE_KEY = 'de_fleet_cache';
+const FLEET_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function saveFleetCache(fleet) {
+  try {
+    localStorage.setItem(FLEET_CACHE_KEY, JSON.stringify({ fleet, ts: Date.now() }));
+  } catch(e) {}
+}
+
+function loadFleetCache() {
+  try {
+    const raw = localStorage.getItem(FLEET_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.fleet) return null;
+    if (Date.now() - parsed.ts > FLEET_CACHE_TTL) return null; // expired
+    return parsed.fleet;
+  } catch(e) { return null; }
+}
+
 // ── START APP ─────────────────────────────────────────────────────────────────
 async function startApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('user-chip').textContent = S.user.name;
-  spin('Loading data...');
+
+  // Stage 1: Load projects + users (fast — small sheets)
+  spin('Loading...');
   try {
     const data = await api({ action: 'getData' });
     S.projects = data.projects || [];
-    S.fleet = data.fleet || [];
-    S.lastReading = data.lastReading || {};
     S.users = data.users || [];
+    S.lastReading = data.lastReading || {};
     setOnline(true);
     populateProjects();
     await loadTodayLog();
@@ -461,8 +484,32 @@ async function startApp() {
   } catch(e) {
     setOnline(false);
     showAlert('error', 'Could not load data. Check your connection.');
+    unspin();
+    return;
   }
   unspin();
+
+  // Stage 2: Load fleet — from cache instantly, then refresh in background
+  const cached = loadFleetCache();
+  if (cached && cached.length) {
+    S.fleet = cached;
+    document.getElementById('sync-label').textContent = 'Online (cached)';
+  } else {
+    document.getElementById('sync-label').textContent = 'Loading fleet...';
+  }
+
+  // Always refresh fleet in background
+  try {
+    const fleetData = await api({ action: 'getFleet' });
+    S.fleet = fleetData.fleet || [];
+    S.lastReading = { ...S.lastReading, ...(fleetData.lastReading || {}) };
+    saveFleetCache(S.fleet);
+    setOnline(true);
+  } catch(e) {
+    if (!S.fleet.length) {
+      showAlert('warn', 'Fleet data could not be loaded. Using cached data if available.');
+    }
+  }
 }
 
 // ── POPULATE PROJECTS ─────────────────────────────────────────────────────────
@@ -828,18 +875,66 @@ function buildUI() {
 function renderAdminUsers() {
   const el = document.getElementById('user-list');
   if (!S.users || !S.users.length) { el.innerHTML = '<div class="empty">No users yet.</div>'; return }
-  el.innerHTML = S.users.map(u => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee">
-      <div>
-        <div style="font-weight:700;font-size:14px">${u.name}</div>
-        <div style="font-size:12px;color:var(--muted)">${u.empId||''} · ${u.role==='admin'?'Admin':u.role==='pmv_admin'?'PMV Admin':'Data Entry'} · ${u.status}</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="editUser('${u.id}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
-        <button onclick="delUser('${u.id}','${u.name}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:#fee2e2;color:#b91c1c">✕</button>
-      </div>
-    </div>`).join('');
+
+  const q = (document.getElementById('user-search')?.value || '').toLowerCase().trim();
+  const adminCount = S.users.filter(u => u.role === 'admin' && (u.status||'').toLowerCase() === 'active').length;
+
+  // Filter by search
+  let list = S.users;
+  if (q) list = list.filter(u =>
+    (u.name||'').toLowerCase().includes(q) ||
+    (u.empId||'').toLowerCase().includes(q)
+  );
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">${q ? 'No users matching "'+q+'"' : 'No users yet.'}</div>`;
+    return;
+  }
+
+  // Group by role
+  const roleOrder = ['admin', 'pmv_admin', 'data_entry'];
+  const roleLabel = { admin: '👑 Admin', pmv_admin: '⚙️ PMV Admin', data_entry: '📝 Data Entry' };
+  const roleColor = { admin: RED, pmv_admin: '#D97706', data_entry: NAVY };
+
+  let html = '';
+  roleOrder.forEach(role => {
+    const group = list.filter(u => (u.role || 'data_entry') === role)
+      .sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    if (!group.length) return;
+
+    html += `<div style="padding:6px 0 4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${roleColor[role] || NAVY};border-bottom:2px solid ${roleColor[role] || NAVY};margin-bottom:6px;margin-top:10px">${roleLabel[role] || role} (${group.length})</div>`;
+
+    group.forEach(u => {
+      const isSelf = u.id === S.user?.id;
+      const isLastAdmin = role === 'admin' && adminCount === 1 && (u.status||'').toLowerCase() === 'active';
+      const canDelete = !isSelf && !isLastAdmin;
+      const statusColor = (u.status||'').toLowerCase() === 'active' ? '#16A34A' : '#9CA3AF';
+
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0ee">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;font-size:14px">${u.name}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${statusColor}20;color:${statusColor}">${u.status||'Active'}</span>
+            ${isSelf ? '<span style="font-size:10px;color:var(--muted);font-style:italic">(you)</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${u.empId||'—'}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button onclick="editUser('${u.id}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
+          ${canDelete
+            ? `<button onclick="delUser('${u.id}','${u.name}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:#fee2e2;color:#b91c1c">✕</button>`
+            : `<button disabled title="${isSelf?'Cannot delete yourself':isLastAdmin?'Cannot delete the only Admin':''}" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-weight:700;cursor:not-allowed;background:#f9fafb;color:#d1d5db">✕</button>`
+          }
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
 }
+
+// Constants for role colors (used in renderAdminUsers)
+const RED = 'var(--red)';
+const NAVY = 'var(--navy)';
 
 // ── ADMIN: ADD/EDIT USER ──────────────────────────────────────────────────────
 function openAddUser() {
@@ -892,6 +987,14 @@ async function saveUser() {
 }
 async function delUser(id, name) {
   if (!isAdmin()) return;
+  // Protection: cannot delete yourself
+  if (id === S.user?.id) { alert('You cannot delete your own account.'); return }
+  // Protection: cannot delete the last Admin
+  const activeAdmins = S.users.filter(u => u.role === 'admin' && (u.status||'').toLowerCase() === 'active');
+  if (activeAdmins.length === 1 && activeAdmins[0].id === id) {
+    alert('Cannot delete the only Admin account. Add another Admin first.');
+    return;
+  }
   if (!confirm('Delete user "' + name + '"? This cannot be undone.')) return;
   spin('Deleting...');
   try {
