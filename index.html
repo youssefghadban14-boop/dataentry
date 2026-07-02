@@ -678,9 +678,27 @@ async function doSubmit() {
   spin('Saving...');
   document.getElementById('submit-btn').disabled = true;
   try {
-    await api({ action: 'saveTransaction', ...tx });
+    const result = await api({ action: 'saveTransaction', ...tx });
+    // Check for server-side meter validation rejection
+    if (result.error === 'METER_READING_TOO_LOW') {
+      showAlert('error', '⚠️ ' + result.message);
+      // Update in-memory lastReading to the server's value so client is now in sync
+      S.lastReading[fleetNo] = { reading: result.lastReading, date: '' };
+      document.getElementById('f-meter').value = '';
+      document.getElementById('f-meter').style.borderColor = 'var(--red)';
+      document.getElementById('f-meter').focus();
+      document.getElementById('submit-btn').disabled = false;
+      unspin();
+      return;
+    }
+    if (result.error) {
+      showAlert('error', 'Save failed: ' + result.error);
+      document.getElementById('submit-btn').disabled = false;
+      unspin();
+      return;
+    }
     // Update lastReading in memory
-    S.lastReading[fleetNo] = { reading: meter, date: tx.date };
+    S.lastReading[fleetNo] = { reading: meter, date: tx.entryDate };
     // Add to today's log
     S.todayLog.unshift(tx);
     renderHistory();
