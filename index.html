@@ -568,10 +568,15 @@ function showMachineInfo(f) {
   document.getElementById('meter-section').style.display = 'block';
   document.getElementById('qty-section').style.display = 'block';
   document.getElementById('notes-section').style.display = 'block';
-  // Set transaction date default to today Qatar time
+  // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
   const txDateEl = document.getElementById('f-tx-date');
-  txDateEl.value = qDate();
-  txDateEl.max = qDate(); // Cannot be in the future
+  const todayQ = qDate();
+  const cutoffDate = new Date(new Date().getTime() + (3*60*60*1000));
+  cutoffDate.setDate(cutoffDate.getUTCDate() - 10);
+  const minDate = cutoffDate.toISOString().slice(0,10);
+  txDateEl.value = todayQ;
+  txDateEl.max = todayQ;
+  txDateEl.min = minDate;
   document.getElementById('txdate-section').style.display = 'block';
   document.getElementById('submit-btn').style.display = 'block';
   document.getElementById('submit-btn').disabled = false;
@@ -656,6 +661,15 @@ async function doSubmit() {
 
   const txDate = document.getElementById('f-tx-date').value;
   if (!txDate) { showAlert('error', 'Please select the transaction date.'); return }
+  // Client-side 10-day cutoff check
+  const txDateObj = new Date(txDate);
+  const cutoffQ = new Date(new Date().getTime() + (3*60*60*1000));
+  cutoffQ.setDate(cutoffQ.getUTCDate() - 10);
+  cutoffQ.setHours(0,0,0,0);
+  if (txDateObj < cutoffQ) {
+    showAlert('error', 'Transaction date is more than 10 days old. Transactions must be recorded within 10 days. Please contact your supervisor.');
+    return;
+  }
 
   const tx = {
     id: rid(),
@@ -680,6 +694,12 @@ async function doSubmit() {
   try {
     const result = await api({ action: 'saveTransaction', ...tx });
     // Check for server-side meter validation rejection
+    if (result.error === 'TRANSACTION_TOO_OLD') {
+      showAlert('error', '⚠️ ' + result.message);
+      document.getElementById('submit-btn').disabled = false;
+      unspin();
+      return;
+    }
     if (result.error === 'METER_READING_TOO_LOW') {
       showAlert('error', '⚠️ ' + result.message);
       // Update in-memory lastReading to the server's value so client is now in sync
