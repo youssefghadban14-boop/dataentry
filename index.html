@@ -99,6 +99,10 @@
 
   /* ── NOTE REQUIRED ── */
   .note-required{color:var(--red);font-size:11px;font-weight:700;margin-left:4px;display:none}
+  /* Fuel type buttons */
+  .fuel-btns{display:flex;gap:10px;margin-bottom:4px}
+  .fuel-btn{flex:1;padding:13px 8px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;text-align:center;transition:all .2s;letter-spacing:.02em}
+  .fuel-btn.active{border-color:var(--red);background:var(--red);color:white;box-shadow:0 3px 10px rgba(195,28,42,.25)}
   textarea{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:Arial,sans-serif;font-size:15px;padding:13px 14px;outline:none;resize:vertical;min-height:80px;transition:border-color .2s;margin-bottom:4px}
   textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(195,28,42,.1);background:#fff}
 
@@ -247,6 +251,17 @@ document.head.appendChild(link);
         <label>Transaction date *</label>
         <input type="date" id="f-tx-date" max="" style="margin-bottom:4px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? (defaults to today)</div>
+      </div>
+
+      <!-- FUEL TYPE -->
+      <div class="fg" id="fuel-section" style="display:none">
+        <label>Fuel type *</label>
+        <div class="fuel-btns">
+          <button type="button" class="fuel-btn active" id="fuel-diesel" onclick="selectFuel('Diesel')">⛽ Diesel</button>
+          <button type="button" class="fuel-btn" id="fuel-petrol91" onclick="selectFuel('Petrol 91')">🔵 Petrol 91</button>
+          <button type="button" class="fuel-btn" id="fuel-petrol95" onclick="selectFuel('Petrol 95')">🟢 Petrol 95</button>
+        </div>
+        <input type="hidden" id="f-fuel-type" value="Diesel">
       </div>
 
       <!-- NOTES -->
@@ -560,6 +575,16 @@ async function loadTodayLog() {
   renderHistory();
 }
 
+function selectFuel(type) {
+  document.getElementById('f-fuel-type').value = type;
+  ['Diesel','Petrol 91','Petrol 95'].forEach(t => {
+    const id = 'fuel-' + t.toLowerCase().replace(' ','').replace(' ','');
+    const idMap = {'Diesel':'fuel-diesel','Petrol 91':'fuel-petrol91','Petrol 95':'fuel-petrol95'};
+    const btn = document.getElementById(idMap[t]);
+    if (btn) btn.className = 'fuel-btn' + (t === type ? ' active' : '');
+  });
+}
+
 function populateProjects() {
   const sel = document.getElementById('f-project');
   sel.innerHTML = '<option value="">— Select project —</option>' +
@@ -614,6 +639,7 @@ function resetMachine() {
   document.getElementById('meter-section').style.display = 'none';
   document.getElementById('qty-section').style.display = 'none';
   document.getElementById('txdate-section').style.display = 'none';
+  document.getElementById('fuel-section').style.display = 'none';
   document.getElementById('notes-section').style.display = 'none';
   document.getElementById('submit-btn').style.display = 'none';
   document.getElementById('submit-btn').disabled = true;
@@ -621,6 +647,7 @@ function resetMachine() {
   document.getElementById('f-qty').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-tx-date').value = '';
+  selectFuel('Diesel');
   document.getElementById('meter-warn').style.display = 'none';
   document.getElementById('qty-warn').style.display = 'none';
   document.getElementById('note-required').style.display = 'none';
@@ -651,6 +678,7 @@ function showMachineInfo(f) {
   document.getElementById('machine-info').style.display = 'block';
   document.getElementById('meter-section').style.display = 'block';
   document.getElementById('qty-section').style.display = 'block';
+  document.getElementById('fuel-section').style.display = 'block';
   document.getElementById('notes-section').style.display = 'block';
   // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
   const txDateEl = document.getElementById('f-tx-date');
@@ -744,6 +772,7 @@ async function doSubmit() {
   const isOdo = ['odometer','odo','km','kms','kilometer','kilometers'].includes((selectedFleet.meterType||'').toLowerCase());
 
   const txDate = document.getElementById('f-tx-date').value;
+  const fuelType = document.getElementById('f-fuel-type').value || 'Diesel';
   if (!txDate) { showAlert('error', 'Please select the transaction date.'); return }
   // Client-side 10-day cutoff check
   const txDateObj = new Date(txDate);
@@ -770,6 +799,7 @@ async function doSubmit() {
     meterReading: meter,
     meterUnit: isOdo ? 'km' : 'hrs',
     qty,
+    fuelType,
     notes,
     warning
   };
@@ -825,6 +855,7 @@ function resetForm() {
   document.getElementById('f-qty').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-tx-date').value = '';
+  selectFuel('Diesel');
   document.getElementById('f-meter').style.borderColor = '';
   document.getElementById('f-qty').style.borderColor = '';
   document.getElementById('f-notes').style.borderColor = '';
@@ -852,7 +883,7 @@ function renderHistory() {
         </div>
         <div class="history-qty">${(t.qty||t['Quantity (L)']||0).toLocaleString()} L</div>
       </div>
-      <div class="history-meta">Meter: ${(t.meterReading||t['Meter Reading']||0).toLocaleString()} ${t.meterUnit||t['Meter Unit']||'hrs'}${(t.notes||t['Notes'])?' · '+(t.notes||t['Notes']):''}${(t.warning||t['Warning'])?' <span class="badge badge-warn">⚠️ Excess</span>':''}</div>
+      <div class="history-meta">Meter: ${(t.meterReading||t['Meter Reading']||0).toLocaleString()} ${t.meterUnit||t['Meter Unit']||'hrs'} · <strong>${t.fuelType||t['Fuel Type']||'Diesel'}</strong>${(t.notes||t['Notes'])?' · '+(t.notes||t['Notes']):''}${(t.warning||t['Warning'])?' <span class="badge badge-warn">⚠️ Excess</span>':''}</div>
     </div>`).join('');
 }
 
@@ -1225,7 +1256,7 @@ async function dlTransactions() {
     const data = await api({ action: 'getTransactions' });
     const rows = data.transactions || [];
     if (!rows.length) { alert('No transactions to download.'); unspin(); return }
-    const headers = ['ID','Entry Date/Time','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning'];
+    const headers = ['ID','Entry Date/Time','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Fuel Type','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning'];
     const wsData = [headers, ...rows.map(r => headers.map(h => r[h]||''))];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(wsData);
