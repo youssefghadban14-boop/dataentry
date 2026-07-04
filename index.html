@@ -271,6 +271,12 @@ document.head.appendChild(link);
         <input type="hidden" id="f-fuel-type" value="Diesel">
       </div>
 
+      <!-- FUEL SOURCE (optional — provisional, pending final decision) -->
+      <div class="fg" id="fuelsource-section" style="display:none">
+        <label>Fuel source <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <select id="f-fuel-source"><option value="">— Not specified —</option></select>
+      </div>
+
       <!-- NOTES -->
       <div class="fg" id="notes-section" style="display:none">
         <label>Notes <span class="note-required" id="note-required">* Required</span></label>
@@ -318,6 +324,15 @@ document.head.appendChild(link);
         </div>
         <input type="text" id="eq-search" placeholder="Search Fleet No, Type, Make..." oninput="renderAdminEquipment()" style="margin-bottom:12px;font-size:14px">
         <div id="equipment-list"><div style="padding:16px;color:var(--muted);font-size:13px">Type above to search equipment.</div></div>
+      </div>
+
+      <!-- FUEL SOURCE MANAGEMENT (provisional — PMV Admin + Admin) -->
+      <div class="card" id="fuelsource-mgmt-card" style="display:none">
+        <div class="card-title"><span>🛢️</span> Fuel source management <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px">(provisional)</span>
+          <button onclick="openAddFuelSource()" style="margin-left:auto;padding:6px 14px;background:var(--red);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Add source</button>
+        </div>
+        <input type="text" id="fs-search" placeholder="Search type, tag/plate no, ownership, location..." oninput="renderAdminFuelSources()" style="margin-bottom:12px;font-size:14px">
+        <div id="fuelsource-list"><div style="padding:16px;color:var(--muted);font-size:13px">Type above to search fuel sources.</div></div>
       </div>
 
       <!-- DOWNLOAD -->
@@ -383,6 +398,32 @@ document.head.appendChild(link);
       </div>
     </div>
 
+    <!-- ADD FUEL SOURCE MODAL (provisional) -->
+    <div id="m-fuelsource" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px;overflow-y:auto">
+      <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto">
+        <div style="font-size:15px;font-weight:800;margin-bottom:18px" id="fs-modal-title">Add fuel source</div>
+        <input type="hidden" id="fs-edit-id">
+        <div class="fg"><label>Type *</label>
+          <select id="fs-type">
+            <option value="">— Select type —</option>
+            <option value="Fixed Tank">Fixed Tank</option>
+            <option value="Mobile Tanker">Mobile Tanker</option>
+            <option value="Filling Station">Filling Station</option>
+          </select>
+        </div>
+        <div class="fg"><label>Fleet / Tag / Plate No *</label><input id="fs-tag" type="text" placeholder="e.g. TNK-04 or plate no"></div>
+        <div class="fg"><label>Tank Capacity (L)</label><input id="fs-cap" type="number" min="0" placeholder="e.g. 10000"></div>
+        <div class="fg"><label>Ownership</label><input id="fs-ownership" type="text" placeholder="e.g. C.A.T., Al-Samah Est., station owner name..."></div>
+        <div class="fg"><label>Location</label><input id="fs-location" type="text" placeholder="e.g. Site A yard, Riyadh depot..."></div>
+        <div class="fg"><label>Driver / Storekeeper in charge</label><input id="fs-incharge" type="text" placeholder="e.g. Ahmed Al-Rashid"></div>
+        <div class="fg"><label>Status</label><select id="fs-status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button onclick="document.getElementById('m-fuelsource').style.display='none'" style="flex:1;padding:12px;background:#f4f4f2;border:1px solid #d0d0ca;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
+          <button onclick="saveFuelSource()" style="flex:2;padding:12px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Save source</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ADD USER MODAL -->
     <div id="m-user" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px">
       <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
@@ -416,7 +457,7 @@ document.head.appendChild(link);
 const GS_URL = 'https://script.google.com/macros/s/AKfycbxyMnSRej_KLHlcuqNmoqMzxyVHCdOVM8tNEjRgwBNFGGcxSmIruFFExWjRlH_byhm2/exec';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let S = { user: null, projects: [], fleet: [], lastReading: {}, users: [], todayLog: [] };
+let S = { user: null, projects: [], fleet: [], lastReading: {}, users: [], todayLog: [], fuelSources: [] };
 let selectedFleet = null;
 
 // ── QATAR TIME ────────────────────────────────────────────────────────────────
@@ -539,6 +580,12 @@ async function startApp() {
     populateProjects();
     await loadTodayLog();
     buildUI();
+    // Fuel Sources — provisional, load in background, non-blocking
+    api({ action: 'getFuelSources' }).then(fsData => {
+      S.fuelSources = fsData.fuelSources || [];
+      populateFuelSourceOptions();
+      if (isAdmin() || S.user?.role === 'pmv_admin') renderAdminFuelSources();
+    }).catch(() => { S.fuelSources = []; });
   } catch(e) {
     setOnline(false);
     showAlert('error', 'Could not load data. Check your connection.');
@@ -646,6 +693,7 @@ function resetMachine() {
   document.getElementById('qty-section').style.display = 'none';
   document.getElementById('txdate-section').style.display = 'none';
   document.getElementById('fuel-section').style.display = 'none';
+  document.getElementById('fuelsource-section').style.display = 'none';
   document.getElementById('notes-section').style.display = 'none';
   document.getElementById('submit-btn').style.display = 'none';
   document.getElementById('submit-btn').disabled = true;
@@ -654,6 +702,7 @@ function resetMachine() {
   document.getElementById('f-notes').value = '';
   document.getElementById('f-tx-date').value = '';
   document.getElementById('f-samedate').checked = true;
+  if (document.getElementById('f-fuel-source')) document.getElementById('f-fuel-source').value = '';
   selectFuel('Diesel');
   document.getElementById('qty-warn').style.display = 'none';
   document.getElementById('note-required').style.display = 'none';
@@ -686,6 +735,7 @@ function showMachineInfo(f) {
   document.getElementById('meter-section').style.display = 'block';
   document.getElementById('qty-section').style.display = 'block';
   document.getElementById('fuel-section').style.display = 'block';
+  document.getElementById('fuelsource-section').style.display = 'block';
   document.getElementById('notes-section').style.display = 'block';
   // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
   const txDateEl = document.getElementById('f-tx-date');
@@ -723,6 +773,7 @@ function onSameDateToggle() {
     txDateEl.disabled = false;
     txDateEl.style.background = '';
   }
+  onMeterInput();
 }
 
 // ── VALIDATIONS ───────────────────────────────────────────────────────────────
@@ -731,10 +782,19 @@ function onMeterInput() {
   const val = parseFloat(document.getElementById('f-meter').value) || 0;
   const last = S.lastReading[selectedFleet.fleetNo];
   const warnEl = document.getElementById('meter-warn');
+  const sameDate = document.getElementById('f-samedate') ? document.getElementById('f-samedate').checked : true;
   if (last && last.reading && val > 0 && val <= last.reading) {
-    warnEl.textContent = `⚠️ Reading must be higher than last recorded: ${last.reading.toLocaleString()}`;
-    warnEl.style.display = 'block';
-    document.getElementById('f-meter').style.borderColor = 'var(--red)';
+    if (sameDate) {
+      warnEl.textContent = `⚠️ Reading must be higher than last recorded: ${last.reading.toLocaleString()}`;
+      warnEl.style.display = 'block';
+      document.getElementById('f-meter').style.borderColor = 'var(--red)';
+    } else {
+      // Backdating to an earlier date — a lower reading can be perfectly valid.
+      // The server checks this properly against the actual transaction date order.
+      warnEl.textContent = `ℹ️ Reading is lower than the last recorded value (${last.reading.toLocaleString()}) — that's OK if this date is genuinely earlier. It will be checked against the exact dates when you submit.`;
+      warnEl.style.display = 'block';
+      document.getElementById('f-meter').style.borderColor = '';
+    }
   } else {
     warnEl.style.display = 'none';
     document.getElementById('f-meter').style.borderColor = '';
@@ -774,14 +834,6 @@ async function doSubmit() {
   if (!project) { showAlert('error', 'Please select a project.'); return }
   if (!fleetNo || !selectedFleet) { showAlert('error', 'Please select a machine from the list.'); return }
   if (!meter || meter <= 0) { showAlert('error', 'Please enter the meter reading.'); return }
-
-  // Check meter is higher than last
-  const last = S.lastReading[fleetNo];
-  if (last && last.reading && meter <= last.reading) {
-    showAlert('error', `Meter reading must be higher than the last recorded reading (${last.reading.toLocaleString()}).`);
-    document.getElementById('f-meter').focus();
-    return;
-  }
 
   if (!qty || qty <= 0) { showAlert('error', 'Please enter the quantity.'); return }
 
@@ -830,6 +882,7 @@ async function doSubmit() {
     meterUnit: isOdo ? 'km' : 'hrs',
     qty,
     fuelType,
+    fuelSource: document.getElementById('f-fuel-source') ? document.getElementById('f-fuel-source').value : '',
     notes,
     warning
   };
@@ -970,6 +1023,9 @@ function buildUI() {
   // Equipment management — Admin + PMV Admin
   const eqCard = document.getElementById('equipment-mgmt-card');
   if (eqCard) eqCard.style.display = (isAdmin() || isPMV) ? 'block' : 'none';
+  // Fuel Source management (provisional) — Admin + PMV Admin
+  const fsCard = document.getElementById('fuelsource-mgmt-card');
+  if (fsCard) fsCard.style.display = (isAdmin() || isPMV) ? 'block' : 'none';
   // Download — Admin and PMV Admin
   const dlCards = document.querySelectorAll('#admin-panel .card');
   dlCards.forEach(card => {
@@ -1291,7 +1347,114 @@ async function saveEquipment() {
   unspin();
 }
 
+// ── FUEL SOURCE DROPDOWN (transaction form — optional, provisional) ──────────
+function populateFuelSourceOptions() {
+  const sel = document.getElementById('f-fuel-source');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Not specified —</option>' +
+    S.fuelSources.map(f => `<option value="${f.tag}">${f.tag} — ${f.ftype}${f.location ? ' · '+f.location : ''}</option>`).join('');
+}
+
+// ── FUEL SOURCE MANAGEMENT (provisional — Admin + PMV Admin) ─────────────────
+function renderAdminFuelSources() {
+  const el = document.getElementById('fuelsource-list');
+  if (!el) return;
+  const q = (document.getElementById('fs-search')?.value || '').toLowerCase().trim();
+  let list = S.fuelSources;
+  if (q) list = list.filter(f =>
+    (f.ftype||'').toLowerCase().includes(q) ||
+    (f.tag||'').toLowerCase().includes(q) ||
+    (f.ownership||'').toLowerCase().includes(q) ||
+    (f.location||'').toLowerCase().includes(q)
+  );
+  if (!q) {
+    el.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:13px">Type above to search fuel sources.</div>';
+    return;
+  }
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">No fuel sources matching "${q}"</div>`;
+    return;
+  }
+  el.innerHTML = list.map(f => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee">
+      <div>
+        <div style="font-weight:700;font-size:14px">${f.tag} <span style="font-weight:400;color:var(--muted);font-size:12px">${f.ftype||''}</span></div>
+        <div style="font-size:12px;color:var(--muted)">${f.ownership||'—'} · ${f.location||'—'} · Cap: ${f.tankCap||'—'} L · In charge: ${f.inCharge||'—'}</div>
+      </div>
+      <button onclick="editFuelSource('${f.tag}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
+    </div>`).join('');
+}
+function openAddFuelSource() {
+  const role = S.user?.role;
+  if (role !== 'admin' && role !== 'pmv_admin') { alert('Admin or PMV Admin only.'); return }
+  document.getElementById('fs-edit-id').value = '';
+  document.getElementById('fs-modal-title').textContent = 'Add fuel source';
+  document.getElementById('fs-type').value = '';
+  document.getElementById('fs-tag').value = '';
+  document.getElementById('fs-cap').value = '';
+  document.getElementById('fs-ownership').value = '';
+  document.getElementById('fs-location').value = '';
+  document.getElementById('fs-incharge').value = '';
+  document.getElementById('fs-status').value = 'Active';
+  document.getElementById('m-fuelsource').style.display = 'flex';
+}
+function editFuelSource(tag) {
+  const role = S.user?.role;
+  if (role !== 'admin' && role !== 'pmv_admin') return;
+  const f = S.fuelSources.find(x => x.tag === tag); if (!f) return;
+  document.getElementById('fs-edit-id').value = tag;
+  document.getElementById('fs-modal-title').textContent = 'Edit fuel source';
+  document.getElementById('fs-type').value = f.ftype || '';
+  document.getElementById('fs-tag').value = f.tag || '';
+  document.getElementById('fs-cap').value = f.tankCap || '';
+  document.getElementById('fs-ownership').value = f.ownership || '';
+  document.getElementById('fs-location').value = f.location || '';
+  document.getElementById('fs-incharge').value = f.inCharge || '';
+  document.getElementById('fs-status').value = f.status || 'Active';
+  document.getElementById('m-fuelsource').style.display = 'flex';
+}
+async function saveFuelSource() {
+  const role = S.user?.role;
+  if (role !== 'admin' && role !== 'pmv_admin') return;
+  const editId = document.getElementById('fs-edit-id').value;
+  const ftype = document.getElementById('fs-type').value;
+  const tag = document.getElementById('fs-tag').value.trim();
+  if (!ftype) { alert('Type is required.'); return }
+  if (!tag) { alert('Fleet / Tag / Plate No is required.'); return }
+  const fs = {
+    ftype, tag,
+    tankCap: parseFloat(document.getElementById('fs-cap').value) || 0,
+    ownership: document.getElementById('fs-ownership').value.trim(),
+    location: document.getElementById('fs-location').value.trim(),
+    inCharge: document.getElementById('fs-incharge').value.trim(),
+    status: document.getElementById('fs-status').value
+  };
+  spin('Saving fuel source...');
+  try {
+    await api({ action: 'saveFuelSource', editId, ...fs });
+    if (editId) { const idx = S.fuelSources.findIndex(x => x.tag === editId); if (idx >= 0) S.fuelSources[idx] = fs }
+    else S.fuelSources.push(fs);
+    document.getElementById('m-fuelsource').style.display = 'none';
+    renderAdminFuelSources();
+    populateFuelSourceOptions();
+  } catch(e) { alert('Save failed: ' + e.message) }
+  unspin();
+}
+
 // ── DOWNLOAD TRANSACTIONS (current + previous month, one file, two sheets) ────
+function parseDateOnly(raw) {
+  // Accepts a plain 'yyyy-MM-dd' string, a legacy ISO datetime string, or
+  // whatever Sheets happened to store — always returns a clean Date (or null)
+  if (!raw) return null;
+  const s = String(raw);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  return null;
+}
+const DATE_COLUMNS = ['Entry Date', 'Transaction Date'];
+
 async function dlTransactions() {
   if (!isAdmin() && S.user?.role !== 'pmv_admin') return;
   spin('Preparing Excel...');
@@ -1308,9 +1471,23 @@ async function dlTransactions() {
       const data = await api({ action: 'getTransactions', month });
       const rows = data.transactions || [];
       if (rows.length) anyRows = true;
-      const wsData = [headers, ...rows.map(r => headers.map(h => r[h] || r[oldNames[h]] || ''))];
+      const wsData = [headers, ...rows.map(r => headers.map(h => {
+        const raw = r[h] || r[oldNames[h]] || '';
+        if (DATE_COLUMNS.includes(h)) { const d = parseDateOnly(raw); return d || raw; }
+        return raw;
+      }))];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length, 14) }));
+      // Force a clean, consistent date number format on the two date columns
+      // so Excel/ERP recognizes them as real dates, not text
+      DATE_COLUMNS.forEach(colName => {
+        const colIdx = headers.indexOf(colName);
+        if (colIdx < 0) return;
+        for (let r = 1; r < wsData.length; r++) {
+          const ref = XLSX.utils.encode_cell({ r, c: colIdx });
+          if (ws[ref] && ws[ref].v instanceof Date) ws[ref].z = 'yyyy-mm-dd';
+        }
+      });
       const tabName = (data.sheet || ('Transactions_' + month)).replace('Transactions_', 'Tx_').slice(0, 31);
       XLSX.utils.book_append_sheet(wb, ws, tabName);
     }
