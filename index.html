@@ -79,9 +79,10 @@
   /* ── HISTORY ── */
   .history-item{border-bottom:1px solid #eee;padding:12px 0}
   .history-item:last-child{border-bottom:none}
-  .history-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
-  .history-fleet{font-weight:800;font-size:14px}
-  .history-qty{font-weight:800;font-size:15px;color:var(--red)}
+  .history-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px}
+  .history-fleet{font-weight:800;font-size:14px;min-width:0}
+  .history-left{min-width:0;flex:1}
+  .history-qty{font-weight:800;font-size:15px;color:var(--red);white-space:nowrap;flex-shrink:0;text-align:right}
   .history-meta{font-size:11px;color:var(--muted)}
   .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
   .badge-blue{background:#dfe9ee;color:var(--navy)}
@@ -292,14 +293,27 @@ document.head.appendChild(link);
     <!-- ADMIN PANEL -->
     <div id="admin-panel" style="display:none">
 
+      <!-- ANNOUNCEMENT MANAGEMENT (Admin only) -->
+      <div class="card" id="announcement-mgmt-card" style="display:none">
+        <div class="card-title"><span>📢</span> Announcement to all users</div>
+        <textarea id="ann-message" rows="4" placeholder="e.g. Have a nice day! Please enter all diesel entries within one week." style="width:100%;margin-bottom:10px;font-family:inherit;font-size:14px;padding:10px;border:1px solid #d0d0ca;border-radius:8px;resize:vertical"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="ann-active" style="width:auto;margin:0">
+          <span style="font-size:13px;font-weight:500">Active — show this to all users next time they open the app</span>
+        </label>
+        <button onclick="saveAnnouncement()" style="width:100%;padding:12px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Save & broadcast</button>
+      </div>
+
       <!-- USER MANAGEMENT -->
       <div class="card">
         <div class="card-title"><span>👥</span> User management
           <button onclick="openAddUser()" style="margin-left:auto;padding:6px 14px;background:var(--red);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Add user</button>
         </div>
         <div id="admin-alert" class="alert"></div>
-        <input type="text" id="user-search" placeholder="Search by name or Employee ID..." oninput="renderAdminUsers()" style="margin-bottom:12px;font-size:14px">
-        <div id="user-list"><div class="empty">No users yet.</div></div>
+        <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Select a user to edit</label>
+        <select id="user-edit-select" onchange="onUserEditSelect()" style="width:100%">
+          <option value="">— Select user —</option>
+        </select>
       </div>
 
       <!-- PROJECT MANAGEMENT -->
@@ -383,6 +397,16 @@ document.head.appendChild(link);
       </div>
     </div>
 
+    <!-- ANNOUNCEMENT MODAL (blocking — must dismiss before continuing) -->
+    <div id="m-announcement" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;align-items:center;justify-content:center;padding:20px">
+      <div style="background:white;border-radius:16px;padding:28px 24px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.35);text-align:center">
+        <div style="font-size:32px;margin-bottom:10px">📢</div>
+        <div style="font-size:16px;font-weight:800;margin-bottom:12px;color:var(--navy)">Announcement</div>
+        <div id="announcement-text" style="font-size:14px;color:#333;line-height:1.5;margin-bottom:22px;white-space:pre-wrap"></div>
+        <button onclick="dismissAnnouncement()" style="width:100%;padding:14px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Got it, continue</button>
+      </div>
+    </div>
+
     <!-- ADD USER MODAL -->
     <div id="m-user" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px">
       <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
@@ -405,6 +429,7 @@ document.head.appendChild(link);
           <button onclick="closeUserModal()" style="flex:1;padding:12px;background:#f4f4f2;border:1px solid #d0d0ca;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
           <button onclick="saveUser()" style="flex:2;padding:12px;background:var(--red);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer" id="u-save-btn">Save user</button>
         </div>
+        <button onclick="delUserFromModal()" id="u-delete-btn" style="display:none;width:100%;margin-top:10px;padding:10px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Delete this user</button>
       </div>
     </div>
 
@@ -464,6 +489,44 @@ function clearAlert() {
   const el = document.getElementById('form-alert');
   el.className = 'alert';
   el.textContent = '';
+}
+
+// ── ANNOUNCEMENT (broadcast message shown to all users on app load) ──────────
+let currentAnnouncementVersion = '';
+function checkAnnouncement() {
+  api({ action: 'getAnnouncement' }).then(ann => {
+    if (ann && ann.active && ann.message && ann.version) {
+      const seen = localStorage.getItem('de_announcement_seen');
+      if (seen !== ann.version) {
+        currentAnnouncementVersion = ann.version;
+        document.getElementById('announcement-text').textContent = ann.message;
+        document.getElementById('m-announcement').style.display = 'flex';
+      }
+    }
+  }).catch(() => {});
+}
+function dismissAnnouncement() {
+  if (currentAnnouncementVersion) localStorage.setItem('de_announcement_seen', currentAnnouncementVersion);
+  document.getElementById('m-announcement').style.display = 'none';
+}
+function loadAnnouncementAdminFields() {
+  if (!isAdmin()) return;
+  api({ action: 'getAnnouncement' }).then(ann => {
+    document.getElementById('ann-message').value = (ann && ann.message) || '';
+    document.getElementById('ann-active').checked = !!(ann && ann.active);
+  }).catch(() => {});
+}
+async function saveAnnouncement() {
+  if (!isAdmin()) { alert('Admin only.'); return }
+  const message = document.getElementById('ann-message').value.trim();
+  const active = document.getElementById('ann-active').checked;
+  if (active && !message) { alert('Please enter a message before activating it.'); return }
+  spin('Saving announcement...');
+  try {
+    await api({ action: 'saveAnnouncement', message, active });
+    alert(active ? '✓ Announcement saved — users will see it next time they open the app.' : '✓ Announcement saved (inactive).');
+  } catch(e) { alert('Save failed: ' + e.message) }
+  unspin();
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
@@ -539,6 +602,7 @@ async function startApp() {
     populateProjects();
     await loadTodayLog();
     buildUI();
+    checkAnnouncement();
   } catch(e) {
     setOnline(false);
     showAlert('error', 'Could not load data. Check your connection.');
@@ -918,11 +982,11 @@ function renderHistory() {
   el.innerHTML = todayEntries.map(t => `
     <div class="history-item">
       <div class="history-top">
-        <div>
+        <div class="history-left">
           <div class="history-fleet">${t.fleetNo||t['Fleet No']||''} <span class="badge badge-blue">${t.ftype||t['Type']||''}</span></div>
           <div class="history-meta">Transaction: ${t.txDate||t['Transaction Date']||t.date||''} · Entered: ${fmt(t.entryDate||t['Entry Date']||t['Entry Date/Time']||t.date||'')} · ${t.project||t['Project']||''}</div>
         </div>
-        <div class="history-qty">${(t.qty||t['Quantity (L)']||0).toLocaleString()} L</div>
+        <div class="history-qty">${(t.qty||t['Quantity (L)']||0).toLocaleString()}&nbsp;L</div>
       </div>
       <div class="history-meta">Meter: ${(t.meterReading||t['Meter Reading']||0).toLocaleString()} ${t.meterUnit||t['Meter Unit']||'hrs'} · <strong>${t.fuelType||t['Fuel Type']||'Diesel'}</strong>${(t.notes||t['Notes'])?' · '+(t.notes||t['Notes']):''}${(t.warning||t['Warning'])?' <span class="badge badge-warn">⚠️ Excess</span>':''}</div>
     </div>`).join('');
@@ -966,6 +1030,9 @@ function buildUI() {
   const isPMV = role === 'pmv_admin';
   // Admin panel — visible for admin AND pmv_admin
   document.getElementById('admin-panel').style.display = (isAdmin() || isPMV) ? 'block' : 'none';
+  // Announcement management — Admin only
+  const annCard = document.getElementById('announcement-mgmt-card');
+  if (annCard) annCard.style.display = isAdmin() ? 'block' : 'none';
   // Project management — Admin only
   const projCard = document.getElementById('project-mgmt-card');
   if (projCard) projCard.style.display = isAdmin() ? 'block' : 'none';
@@ -977,69 +1044,40 @@ function buildUI() {
   dlCards.forEach(card => {
     if (card.querySelector('[onclick="dlTransactions()"]')) card.style.display = (isAdmin() || isPMV) ? 'block' : 'none';
   });
-  if (isAdmin()) { renderAdminUsers(); renderAdminProjects(); renderAdminEquipment(); }
+  if (isAdmin()) { renderAdminUsers(); renderAdminProjects(); renderAdminEquipment(); loadAnnouncementAdminFields(); }
   if (isPMV) { renderAdminEquipment(); }
 }
 
 // ── ADMIN: RENDER USERS ───────────────────────────────────────────────────────
 function renderAdminUsers() {
-  const el = document.getElementById('user-list');
-  if (!S.users || !S.users.length) { el.innerHTML = '<div class="empty">No users yet.</div>'; return }
-
-  const q = (document.getElementById('user-search')?.value || '').toLowerCase().trim();
-  const adminCount = S.users.filter(u => u.role === 'admin' && (u.status||'').toLowerCase() === 'active').length;
-
-  // Filter by search
-  let list = S.users;
-  if (q) list = list.filter(u =>
-    (u.name||'').toLowerCase().includes(q) ||
-    (u.empId||'').toLowerCase().includes(q)
-  );
-
-  if (!list.length) {
-    el.innerHTML = `<div class="empty">${q ? 'No users matching "'+q+'"' : 'No users yet.'}</div>`;
-    return;
-  }
-
-  // Group by role
+  const sel = document.getElementById('user-edit-select');
+  if (!sel) return;
   const roleOrder = ['admin', 'pmv_admin', 'data_entry'];
   const roleLabel = { admin: '👑 Admin', pmv_admin: '⚙️ PMV Admin', data_entry: '📝 Data Entry' };
-  const roleColor = { admin: RED, pmv_admin: '#D97706', data_entry: NAVY };
 
-  let html = '';
+  let html = '<option value="">— Select user —</option>';
   roleOrder.forEach(role => {
-    const group = list.filter(u => (u.role || 'data_entry') === role)
+    const group = (S.users || []).filter(u => (u.role || 'data_entry') === role)
       .sort((a,b) => (a.name||'').localeCompare(b.name||''));
     if (!group.length) return;
-
-    html += `<div style="padding:6px 0 4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:${roleColor[role] || NAVY};border-bottom:2px solid ${roleColor[role] || NAVY};margin-bottom:6px;margin-top:10px">${roleLabel[role] || role} (${group.length})</div>`;
-
+    html += `<optgroup label="${roleLabel[role] || role}">`;
     group.forEach(u => {
       const isSelf = u.id === S.user?.id;
-      const isLastAdmin = role === 'admin' && adminCount === 1 && (u.status||'').toLowerCase() === 'active';
-      const canDelete = !isSelf && !isLastAdmin;
-      const statusColor = (u.status||'').toLowerCase() === 'active' ? '#16A34A' : '#9CA3AF';
-
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0ee">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-weight:700;font-size:14px">${u.name}</span>
-            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${statusColor}20;color:${statusColor}">${u.status||'Active'}</span>
-            ${isSelf ? '<span style="font-size:10px;color:var(--muted);font-style:italic">(you)</span>' : ''}
-          </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${u.empId||'—'}</div>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button onclick="editUser('${u.id}')" style="padding:6px 10px;border:1px solid #d0d0ca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:white">Edit</button>
-          ${canDelete
-            ? `<button onclick="delUser('${u.id}','${u.name}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:#fee2e2;color:#b91c1c">✕</button>`
-            : `<button disabled title="${isSelf?'Cannot delete yourself':isLastAdmin?'Cannot delete the only Admin':''}" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-weight:700;cursor:not-allowed;background:#f9fafb;color:#d1d5db">✕</button>`
-          }
-        </div>
-      </div>`;
+      const inactive = (u.status||'').toLowerCase() !== 'active';
+      const label = u.name + (u.empId ? ' (' + u.empId + ')' : '') + (inactive ? ' — Inactive' : '') + (isSelf ? ' — you' : '');
+      html += `<option value="${u.id}">${label}</option>`;
     });
+    html += '</optgroup>';
   });
-  el.innerHTML = html;
+  sel.innerHTML = html;
+  sel.value = ''; // always reset — never leave a name sitting visibly selected
+}
+function onUserEditSelect() {
+  const sel = document.getElementById('user-edit-select');
+  const id = sel.value;
+  if (!id) return;
+  editUser(id);
+  sel.value = ''; // reset immediately after opening the edit modal
 }
 
 // Constants for role colors (used in renderAdminUsers)
@@ -1057,6 +1095,7 @@ function openAddUser() {
   document.getElementById('u-role').value = 'data_entry';
   document.getElementById('u-pw-new').value = '';
   document.getElementById('u-status').value = 'Active';
+  document.getElementById('u-delete-btn').style.display = 'none';
   document.getElementById('m-user').style.display = 'flex';
 }
 function editUser(id) {
@@ -1070,6 +1109,25 @@ function editUser(id) {
   document.getElementById('u-role').value = u.role || 'data_entry';
   document.getElementById('u-pw-new').value = u.password || '';
   document.getElementById('u-status').value = u.status || 'Active';
+
+  // Delete button — same self/last-admin protections as before
+  const isSelf = u.id === S.user?.id;
+  const activeAdmins = S.users.filter(x => x.role === 'admin' && (x.status||'').toLowerCase() === 'active');
+  const isLastAdmin = u.role === 'admin' && (u.status||'').toLowerCase() === 'active' && activeAdmins.length === 1 && activeAdmins[0].id === u.id;
+  const delBtn = document.getElementById('u-delete-btn');
+  delBtn.style.display = 'block';
+  if (isSelf || isLastAdmin) {
+    delBtn.disabled = true;
+    delBtn.title = isSelf ? 'Cannot delete yourself' : 'Cannot delete the only Admin';
+    delBtn.style.opacity = '0.5';
+    delBtn.style.cursor = 'not-allowed';
+  } else {
+    delBtn.disabled = false;
+    delBtn.title = '';
+    delBtn.style.opacity = '1';
+    delBtn.style.cursor = 'pointer';
+  }
+
   document.getElementById('m-user').style.display = 'flex';
 }
 function closeUserModal() { document.getElementById('m-user').style.display = 'none' }
@@ -1095,6 +1153,12 @@ async function saveUser() {
   } catch(e) { alert('Save failed: ' + e.message) }
   unspin();
 }
+function delUserFromModal() {
+  const id = document.getElementById('u-edit-id').value;
+  const name = document.getElementById('u-name').value;
+  if (!id) return;
+  delUser(id, name);
+}
 async function delUser(id, name) {
   if (!isAdmin()) return;
   // Protection: cannot delete yourself
@@ -1111,6 +1175,7 @@ async function delUser(id, name) {
     await api({ action: 'deleteUser', id });
     S.users = S.users.filter(x => x.id !== id);
     renderAdminUsers();
+    closeUserModal();
   } catch(e) { alert('Delete failed: ' + e.message) }
   unspin();
 }
