@@ -856,6 +856,15 @@ async function doSubmit() {
       unspin();
       return;
     }
+    if (result.error === 'METER_READING_TOO_HIGH') {
+      showAlert('error', '⚠️ ' + result.message);
+      document.getElementById('f-meter').value = '';
+      document.getElementById('f-meter').style.borderColor = 'var(--red)';
+      document.getElementById('f-meter').focus();
+      document.getElementById('submit-btn').disabled = false;
+      unspin();
+      return;
+    }
     if (result.error) {
       showAlert('error', 'Save failed: ' + result.error);
       document.getElementById('submit-btn').disabled = false;
