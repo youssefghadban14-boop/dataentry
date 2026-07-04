@@ -249,8 +249,15 @@ document.head.appendChild(link);
       <!-- TRANSACTION DATE -->
       <div class="fg" id="txdate-section" style="display:none">
         <label>Transaction date *</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="f-samedate" checked onchange="onSameDateToggle()" style="position:absolute;opacity:0;width:0;height:0">
+          <span id="f-samedate-box" style="width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;transition:background .15s,border-color .15s"></span>
+          <span style="font-weight:500;font-size:13px">Same as entry date (today)</span>
+        </label>
+        </div>
         <input type="date" id="f-tx-date" max="" style="margin-bottom:4px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? (defaults to today)</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? Uncheck above to pick a different date.</div>
       </div>
 
       <!-- FUEL TYPE -->
@@ -317,7 +324,7 @@ document.head.appendChild(link);
       <div class="card">
         <div class="card-title"><span>📥</span> Download data</div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <button onclick="dlTransactions()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">⬇ Download All Transactions (Excel)</button>
+          <button onclick="dlTransactions()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">⬇ Download Transactions — Current + Previous Month (Excel)</button>
           <button onclick="dlEquipment()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">⬇ Download All Equipment (Excel)</button>
           <button onclick="dlProjects()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">⬇ Download All Projects (Excel)</button>
         </div>
@@ -347,8 +354,7 @@ document.head.appendChild(link);
         <input type="hidden" id="eq-edit-id">
         <div class="fg"><label>Fleet No *</label><input id="eq-fleet" type="text" placeholder="e.g. 125223"></div>
         <div class="fg"><label>Type *</label>
-        <input id="eq-type" type="text" placeholder="Select or type a new type..." list="eq-type-list" autocomplete="off">
-        <datalist id="eq-type-list"></datalist></div>
+        <select id="eq-type"><option value="">— Select type —</option></select></div>
         <div class="fg"><label>Make</label><input id="eq-make" type="text" placeholder="e.g. CATERPILLAR"></div>
         <div class="fg"><label>Model</label><input id="eq-model" type="text" placeholder="e.g. 320"></div>
         <div class="fg"><label>Year</label><input id="eq-year" type="number" min="1990" max="2030" placeholder="e.g. 2020"></div>
@@ -419,16 +425,16 @@ function qDate() { const d=qNow(); return d.toISOString().slice(0,10) }
 function qDateTime() { return qNow().toISOString().slice(0,16) }
 function fmt(d) {
   try {
+    const s = String(d);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      // date-only value — just reformat to dd/MM/yyyy, no time
+      return s.slice(0,10).split('-').reverse().join('/');
+    }
     const dt = new Date(new Date(d).getTime() + (3*60*60*1000));
     return dt.toISOString().slice(0,10).split('-').reverse().join('/') + ' ' + dt.toISOString().slice(11,16);
   } catch(e) { return d }
 }
-function rid() {
-  const d=qNow();
-  const yy=String(d.getUTCFullYear()).slice(2),mm=String(d.getUTCMonth()+1).padStart(2,'0'),dd=String(d.getUTCDate()).padStart(2,'0');
-  const hh=String(d.getUTCHours()).padStart(2,'0'),mi=String(d.getUTCMinutes()).padStart(2,'0'),ss=String(d.getUTCSeconds()).padStart(2,'0');
-  return 'DE-'+yy+mm+dd+'-'+hh+mi+ss+'-'+String(Math.floor(Math.random()*90)+10);
-}
+// Serial Nb is now assigned server-side (sequential per monthly sheet) — see Apps Script saveTx()
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function api(params) {
@@ -647,8 +653,8 @@ function resetMachine() {
   document.getElementById('f-qty').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-tx-date').value = '';
+  document.getElementById('f-samedate').checked = true;
   selectFuel('Diesel');
-  document.getElementById('meter-warn').style.display = 'none';
   document.getElementById('qty-warn').style.display = 'none';
   document.getElementById('note-required').style.display = 'none';
   clearAlert();
@@ -660,6 +666,7 @@ function showMachineInfo(f) {
   document.getElementById('mi-type').textContent = f.ftype || '—';
   document.getElementById('mi-make').textContent = [f.make, f.model].filter(Boolean).join(' ') || '—';
   document.getElementById('mi-owner').textContent = f.owner || '—';
+  document.getElementById('mi-category').textContent = f.category || '—';
   document.getElementById('mi-year').textContent = f.year || '—';
   document.getElementById('mi-cap').textContent = f.tankCap ? f.tankCap.toLocaleString() + ' L' : 'Not specified';
   document.getElementById('mi-meter').textContent = isOdo ? 'Odometer (km)' : 'Hourmeter (hrs)';
@@ -690,8 +697,32 @@ function showMachineInfo(f) {
   txDateEl.max = todayQ;
   txDateEl.min = minDate;
   document.getElementById('txdate-section').style.display = 'block';
+  onSameDateToggle();
   document.getElementById('submit-btn').style.display = 'block';
   document.getElementById('submit-btn').disabled = false;
+}
+
+// ── SAME AS ENTRY DATE TOGGLE ─────────────────────────────────────────────────
+function onSameDateToggle() {
+  const same = document.getElementById('f-samedate').checked;
+  const box = document.getElementById('f-samedate-box');
+  const txDateEl = document.getElementById('f-tx-date');
+  if (same) {
+    box.textContent = '✓';
+    box.style.background = 'var(--red)';
+    box.style.border = '2px solid var(--red)';
+    box.style.color = '#fff';
+    txDateEl.value = qDate();
+    txDateEl.disabled = true;
+    txDateEl.style.background = '#f4f4f2';
+  } else {
+    box.textContent = '';
+    box.style.background = '#fff';
+    box.style.border = '2px solid var(--border)';
+    box.style.color = 'var(--muted)';
+    txDateEl.disabled = false;
+    txDateEl.style.background = '';
+  }
 }
 
 // ── VALIDATIONS ───────────────────────────────────────────────────────────────
@@ -785,8 +816,7 @@ async function doSubmit() {
   }
 
   const tx = {
-    id: rid(),
-    entryDate: qDateTime(),   // when this record was entered into the system
+    entryDate: qDate(),       // when this record was entered into the system (date only)
     txDate: txDate,           // when the fuel was actually issued
     operator: S.user.name,
     project,
@@ -867,7 +897,7 @@ function renderHistory() {
   const el = document.getElementById('history-list');
   const today = qDate();
   const todayEntries = S.todayLog.filter(t => {
-    const d = t.entryDate || t['Entry Date/Time'] || t.date || '';
+    const d = t.entryDate || t['Entry Date'] || t['Entry Date/Time'] || t.date || '';
     return String(d).slice(0,10) === today;
   });
   if (!todayEntries.length) {
@@ -879,7 +909,7 @@ function renderHistory() {
       <div class="history-top">
         <div>
           <div class="history-fleet">${t.fleetNo||t['Fleet No']||''} <span class="badge badge-blue">${t.ftype||t['Type']||''}</span></div>
-          <div class="history-meta">Transaction: ${t.txDate||t['Transaction Date']||t.date||''} · Entered: ${fmt(t.entryDate||t['Entry Date/Time']||t.date||'')} · ${t.project||t['Project']||''}</div>
+          <div class="history-meta">Transaction: ${t.txDate||t['Transaction Date']||t.date||''} · Entered: ${fmt(t.entryDate||t['Entry Date']||t['Entry Date/Time']||t.date||'')} · ${t.project||t['Project']||''}</div>
         </div>
         <div class="history-qty">${(t.qty||t['Quantity (L)']||0).toLocaleString()} L</div>
       </div>
@@ -1173,10 +1203,14 @@ function renderAdminEquipment() {
 }
 
 function populateEqDataLists() {
-  // Type datalist — distinct types from existing fleet
+  // Type dropdown — strict list of distinct types from existing fleet (no free typing)
   const types = [...new Set(S.fleet.map(f => f.ftype).filter(Boolean))].sort();
-  const typeList = document.getElementById('eq-type-list');
-  if (typeList) typeList.innerHTML = types.map(t => `<option value="${t}">`).join('');
+  const typeSel = document.getElementById('eq-type');
+  if (typeSel) {
+    const current = typeSel.value;
+    typeSel.innerHTML = '<option value="">— Select type —</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (current) typeSel.value = current;
+  }
   // Owner datalist — distinct owner names from existing fleet
   const owners = [...new Set(S.fleet.map(f => f.owner).filter(Boolean))].sort();
   const ownerList = document.getElementById('eq-owner-list');
@@ -1188,6 +1222,7 @@ function openAddEquipment() {
   document.getElementById('eq-edit-id').value = '';
   document.getElementById('eq-modal-title').textContent = 'Add equipment';
   document.getElementById('eq-fleet').value = '';
+  populateEqDataLists();
   document.getElementById('eq-type').value = '';
   document.getElementById('eq-make').value = '';
   document.getElementById('eq-model').value = '';
@@ -1197,7 +1232,6 @@ function openAddEquipment() {
   document.getElementById('eq-owner').value = '';
   document.getElementById('eq-category').value = '';
   document.getElementById('eq-status').value = 'Active';
-  populateEqDataLists();
   document.getElementById('m-equipment').style.display = 'flex';
 }
 function editEquipment(fleetNo) {
@@ -1207,6 +1241,7 @@ function editEquipment(fleetNo) {
   document.getElementById('eq-edit-id').value = fleetNo;
   document.getElementById('eq-modal-title').textContent = 'Edit equipment';
   document.getElementById('eq-fleet').value = f.fleetNo;
+  populateEqDataLists();
   document.getElementById('eq-type').value = f.ftype || '';
   document.getElementById('eq-make').value = f.make || '';
   document.getElementById('eq-model').value = f.model || '';
@@ -1216,7 +1251,6 @@ function editEquipment(fleetNo) {
   document.getElementById('eq-owner').value = f.owner || '';
   document.getElementById('eq-category').value = f.category || '';
   document.getElementById('eq-status').value = f.status || 'Active';
-  populateEqDataLists();
   document.getElementById('m-equipment').style.display = 'flex';
 }
 async function saveEquipment() {
@@ -1248,21 +1282,30 @@ async function saveEquipment() {
   unspin();
 }
 
-// ── DOWNLOAD CSV ──────────────────────────────────────────────────────────────
+// ── DOWNLOAD TRANSACTIONS (current + previous month, one file, two sheets) ────
 async function dlTransactions() {
   if (!isAdmin() && S.user?.role !== 'pmv_admin') return;
   spin('Preparing Excel...');
   try {
-    const data = await api({ action: 'getTransactions' });
-    const rows = data.transactions || [];
-    if (!rows.length) { alert('No transactions to download.'); unspin(); return }
-    const headers = ['ID','Entry Date/Time','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Fuel Type','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning'];
-    const wsData = [headers, ...rows.map(r => headers.map(h => r[h]||''))];
+    const now = qNow();
+    const prev = new Date(now); prev.setMonth(prev.getMonth() - 1);
+    const curMonth  = now.getFullYear()  + '_' + String(now.getMonth()+1).padStart(2,'0');
+    const prevMonth = prev.getFullYear() + '_' + String(prev.getMonth()+1).padStart(2,'0');
+    const headers = ['Serial Nb','Entry Date','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Fuel Type','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning','Fuel Source'];
+    const oldNames = { 'Serial Nb': 'ID', 'Entry Date': 'Entry Date/Time' }; // fallback for months not yet manually renamed
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    // Style header row width
-    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length, 14) }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+    let anyRows = false;
+    for (const month of [curMonth, prevMonth]) {
+      const data = await api({ action: 'getTransactions', month });
+      const rows = data.transactions || [];
+      if (rows.length) anyRows = true;
+      const wsData = [headers, ...rows.map(r => headers.map(h => r[h] || r[oldNames[h]] || ''))];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length, 14) }));
+      const tabName = (data.sheet || ('Transactions_' + month)).replace('Transactions_', 'Tx_').slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, tabName);
+    }
+    if (!anyRows) { alert('No transactions to download for the last two months.'); unspin(); return }
     XLSX.writeFile(wb, 'CAT_DataEntry_' + qDate() + '.xlsx');
   } catch(e) { alert('Download failed: ' + e.message) }
   unspin();
