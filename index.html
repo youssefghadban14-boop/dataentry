@@ -882,7 +882,7 @@ async function doSubmit() {
   }
 
   const tx = {
-    entryDate: qDate(),       // when this record was entered into the system (date only)
+    entryDate: qDateTime(),   // when this record was entered into the system (date + time, so entry frequency is visible)
     txDate: txDate,           // when the fuel was actually issued
     operator: S.user.name,
     project,
@@ -1370,7 +1370,7 @@ function parseDateOnly(raw) {
   if (!isNaN(d.getTime())) return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   return null;
 }
-const DATE_COLUMNS = ['Entry Date', 'Transaction Date'];
+const DATE_COLUMNS = ['Entry Date/Time', 'Transaction Date'];
 
 async function dlTransactions() {
   if (!isAdmin() && S.user?.role !== 'pmv_admin') return;
@@ -1380,8 +1380,8 @@ async function dlTransactions() {
     const prev = new Date(now); prev.setMonth(prev.getMonth() - 1);
     const curMonth  = now.getFullYear()  + '_' + String(now.getMonth()+1).padStart(2,'0');
     const prevMonth = prev.getFullYear() + '_' + String(prev.getMonth()+1).padStart(2,'0');
-    const headers = ['Serial Nb','Entry Date','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Fuel Type','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning','Fuel Source'];
-    const oldNames = { 'Serial Nb': 'ID', 'Entry Date': 'Entry Date/Time' }; // fallback for months not yet manually renamed
+    const headers = ['Serial Nb','Entry Date/Time','Transaction Date','Operator','Project','Fleet No','Type','Make','Model','Owner','Category','Fuel Type','Meter Reading','Meter Unit','Quantity (L)','Notes','Warning','Fuel Source'];
+    const oldNames = { 'Serial Nb': 'ID', 'Entry Date/Time': 'Entry Date' }; // fallback for the interim month sheet still labeled 'Entry Date'
     const wb = XLSX.utils.book_new();
     let anyRows = false;
     for (const month of [curMonth, prevMonth]) {
