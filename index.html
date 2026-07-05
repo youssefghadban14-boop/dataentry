@@ -310,10 +310,18 @@ document.head.appendChild(link);
           <button onclick="openAddUser()" style="margin-left:auto;padding:6px 14px;background:var(--red);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Add user</button>
         </div>
         <div id="admin-alert" class="alert"></div>
-        <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Select a user to edit</label>
-        <select id="user-edit-select" onchange="onUserEditSelect()" style="width:100%">
-          <option value="">— Select user —</option>
-        </select>
+        <div id="user-edit-wrapper">
+          <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Select a user to edit</label>
+          <select id="user-edit-select" onchange="onUserEditSelect()" style="width:100%">
+            <option value="">— Select user —</option>
+          </select>
+        </div>
+        <div id="pmv-reset-wrapper" style="display:none">
+          <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Reset a Data Entry user's password</label>
+          <select id="pmv-reset-select" onchange="onPMVResetSelect()" style="width:100%">
+            <option value="">— Select Data Entry user —</option>
+          </select>
+        </div>
       </div>
 
       <!-- PROJECT MANAGEMENT -->
@@ -1039,13 +1047,19 @@ function buildUI() {
   // Equipment management — Admin + PMV Admin
   const eqCard = document.getElementById('equipment-mgmt-card');
   if (eqCard) eqCard.style.display = (isAdmin() || isPMV) ? 'block' : 'none';
+  // User edit dropdown — Admin only (PMV Admin can add users, but not edit/delete existing ones)
+  const userEditWrapper = document.getElementById('user-edit-wrapper');
+  if (userEditWrapper) userEditWrapper.style.display = isAdmin() ? 'block' : 'none';
+  // Password-reset dropdown — PMV Admin only, restricted to Data Entry accounts
+  const pmvResetWrapper = document.getElementById('pmv-reset-wrapper');
+  if (pmvResetWrapper) pmvResetWrapper.style.display = isPMV ? 'block' : 'none';
   // Download — Admin and PMV Admin
   const dlCards = document.querySelectorAll('#admin-panel .card');
   dlCards.forEach(card => {
     if (card.querySelector('[onclick="dlTransactions()"]')) card.style.display = (isAdmin() || isPMV) ? 'block' : 'none';
   });
   if (isAdmin()) { renderAdminUsers(); renderAdminProjects(); renderAdminEquipment(); loadAnnouncementAdminFields(); }
-  if (isPMV) { renderAdminEquipment(); }
+  if (isPMV) { renderAdminEquipment(); renderPMVResetOptions(); }
 }
 
 // ── ADMIN: RENDER USERS ───────────────────────────────────────────────────────
@@ -1080,13 +1094,59 @@ function onUserEditSelect() {
   sel.value = ''; // reset immediately after opening the edit modal
 }
 
+// ── PMV ADMIN: RESET AN EXISTING DATA ENTRY USER'S PASSWORD ──────────────────
+// Deliberately restricted — PMV Admin cannot edit name/role/status here, and
+// the dropdown only ever lists Data Entry accounts, never PMV Admin or Admin.
+function renderPMVResetOptions() {
+  const sel = document.getElementById('pmv-reset-select');
+  if (!sel) return;
+  const dataEntryUsers = (S.users || []).filter(u => u.role === 'data_entry')
+    .sort((a, b) => (a.name||'').localeCompare(b.name||''));
+  let html = '<option value="">— Select Data Entry user —</option>';
+  dataEntryUsers.forEach(u => {
+    const inactive = (u.status||'').toLowerCase() !== 'active';
+    html += `<option value="${u.id}">${u.name}${u.empId ? ' ('+u.empId+')' : ''}${inactive ? ' — Inactive' : ''}</option>`;
+  });
+  sel.innerHTML = html;
+  sel.value = '';
+}
+function onPMVResetSelect() {
+  const sel = document.getElementById('pmv-reset-select');
+  const id = sel.value;
+  if (!id) return;
+  openResetPassword(id);
+  sel.value = '';
+}
+function openResetPassword(id) {
+  if (S.user?.role !== 'pmv_admin') return;
+  const u = S.users.find(x => x.id === id && x.role === 'data_entry');
+  if (!u) { alert('User not found, or not a Data Entry account.'); return }
+  document.getElementById('u-edit-id').value = u.id;
+  document.getElementById('u-modal-title').textContent = 'Reset password — ' + u.name;
+  document.getElementById('u-save-btn').textContent = 'Reset password';
+  document.getElementById('u-name').value = u.name;
+  document.getElementById('u-empid').value = u.empId || '';
+  document.getElementById('u-role').value = 'data_entry';
+  document.getElementById('u-pw-new').value = '';
+  document.getElementById('u-status').value = u.status || 'Active';
+  // Lock everything except the password field
+  ['u-name', 'u-empid', 'u-role', 'u-status'].forEach(fid => {
+    const el = document.getElementById(fid);
+    el.disabled = true;
+    el.style.background = '#f4f4f2';
+  });
+  document.getElementById('u-delete-btn').style.display = 'none';
+  document.getElementById('m-user').style.display = 'flex';
+}
+
 // Constants for role colors (used in renderAdminUsers)
 const RED = 'var(--red)';
 const NAVY = 'var(--navy)';
 
 // ── ADMIN: ADD/EDIT USER ──────────────────────────────────────────────────────
 function openAddUser() {
-  if (!isAdmin()) { alert('Admin only.'); return }
+  const role = S.user?.role;
+  if (role !== 'admin' && role !== 'pmv_admin') { alert('Admin or PMV Admin only.'); return }
   document.getElementById('u-edit-id').value = '';
   document.getElementById('u-modal-title').textContent = 'Add user';
   document.getElementById('u-save-btn').textContent = 'Save user';
@@ -1095,6 +1155,18 @@ function openAddUser() {
   document.getElementById('u-role').value = 'data_entry';
   document.getElementById('u-pw-new').value = '';
   document.getElementById('u-status').value = 'Active';
+  // Re-enable fields in case they were left disabled by a previous password-reset session
+  ['u-name', 'u-empid', 'u-status'].forEach(fid => {
+    const el = document.getElementById(fid);
+    el.disabled = false;
+    el.style.background = '';
+  });
+  // PMV Admin can only create Data Entry accounts — lock the role field so they can't
+  // create another PMV Admin or Admin account. Full Admin sees all three roles.
+  const roleSelect = document.getElementById('u-role');
+  const isPMVOnly = role === 'pmv_admin';
+  roleSelect.disabled = isPMVOnly;
+  roleSelect.style.background = isPMVOnly ? '#f4f4f2' : '';
   document.getElementById('u-delete-btn').style.display = 'none';
   document.getElementById('m-user').style.display = 'flex';
 }
@@ -1109,6 +1181,12 @@ function editUser(id) {
   document.getElementById('u-role').value = u.role || 'data_entry';
   document.getElementById('u-pw-new').value = u.password || '';
   document.getElementById('u-status').value = u.status || 'Active';
+  // Re-enable fields in case they were left disabled by a previous password-reset session
+  ['u-name', 'u-empid', 'u-role', 'u-status'].forEach(fid => {
+    const el = document.getElementById(fid);
+    el.disabled = false;
+    el.style.background = '';
+  });
 
   // Delete button — same self/last-admin protections as before
   const isSelf = u.id === S.user?.id;
@@ -1132,13 +1210,28 @@ function editUser(id) {
 }
 function closeUserModal() { document.getElementById('m-user').style.display = 'none' }
 async function saveUser() {
-  if (!isAdmin()) return;
+  const currentRole = S.user?.role;
+  const isPMVOnly = currentRole === 'pmv_admin';
+  if (currentRole !== 'admin' && !isPMVOnly) return;
   const editId = document.getElementById('u-edit-id').value;
   const name = document.getElementById('u-name').value.trim();
   const empId = document.getElementById('u-empid').value.trim();
   const role = document.getElementById('u-role').value;
   const pw = document.getElementById('u-pw-new').value.trim();
   const status = document.getElementById('u-status').value;
+  // Safety net: PMV Admin can only (a) create brand-new Data Entry accounts, or
+  // (b) reset the password of an existing Data Entry account — never anything else.
+  if (isPMVOnly) {
+    if (!editId) {
+      if (role !== 'data_entry') { alert('PMV Admin can only add new Data Entry users.'); return }
+    } else {
+      const targetUser = S.users.find(u => u.id === editId);
+      if (!targetUser || targetUser.role !== 'data_entry' || role !== 'data_entry') {
+        alert('PMV Admin can only reset the password of an existing Data Entry user.');
+        return;
+      }
+    }
+  }
   if (!name) { alert('Name is required.'); return }
   if (!pw) { alert('Password is required.'); return }
   const id = editId || ('USR-' + Date.now());
@@ -1150,6 +1243,7 @@ async function saveUser() {
     else S.users.push(userData);
     closeUserModal();
     renderAdminUsers();
+    renderPMVResetOptions();
   } catch(e) { alert('Save failed: ' + e.message) }
   unspin();
 }
