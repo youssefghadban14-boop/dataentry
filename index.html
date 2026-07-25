@@ -924,12 +924,12 @@ async function doSharedSubmit() {
       entryDate: qDateTime(),
       operator: S.user.name,
       project,
-      generators: sharedGenerators.map(g => ({
+      generators: JSON.stringify(sharedGenerators.map(g => ({
         fleetNo: g.fleetNo, ftype: g.ftype||'', make: g.make||'', model: g.model||'',
         owner: g.owner||'', category: g.category||'',
         ratedKva: g.ratedKva||0,
         newReading: parseFloat(g.newReading)||0
-      }))
+      })))
     };
     const result = await api(payload);
     if (result.error) { showAlert('error', '⚠️ ' + result.message); btn.disabled = false; unspin(); return; }
