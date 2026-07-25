@@ -75,6 +75,16 @@
   .submit-btn{width:100%;padding:18px;background:var(--red);border:none;border-radius:14px;color:#fff;font-family:Arial,sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;box-shadow:0 4px 14px rgba(195,28,42,.3);transition:all .2s;margin-top:4px}
   .submit-btn:active{background:#a01524;transform:translateY(1px)}
   .submit-btn:disabled{background:#ccc;box-shadow:none;cursor:not-allowed}
+  .mode-toggle{display:flex;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:16px;gap:3px}
+  .mode-btn{flex:1;padding:9px 12px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:var(--muted);transition:all .15s}
+  .mode-btn.active{background:white;color:var(--navy);box-shadow:0 1px 6px rgba(0,0,0,.12)}
+  .gen-row{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);border-radius:10px;margin-bottom:8px}
+  .gen-row-info{flex:1;min-width:0}
+  .gen-row-fleet{font-weight:700;font-size:13px;color:var(--navy)}
+  .gen-row-meta{font-size:11px;color:var(--muted)}
+  .gen-row-reading{width:110px;flex-shrink:0}
+  .gen-row-remove{background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;padding:0 4px;flex-shrink:0}
+  .gen-row-kva{font-size:11px;color:var(--red);font-weight:700}
 
   /* ── HISTORY ── */
   .history-item{border-bottom:1px solid #eee;padding:12px 0}
@@ -205,90 +215,154 @@ document.head.appendChild(link);
       <div class="card-title"><span>⛽</span> Record fuel issue</div>
       <div class="alert" id="form-alert"></div>
 
-      <!-- PROJECT -->
+      <!-- MODE TOGGLE -->
+      <div class="mode-toggle" id="mode-toggle">
+        <button class="mode-btn active" id="mode-single-btn" onclick="setMode('single')">Single machine</button>
+        <button class="mode-btn" id="mode-shared-btn" onclick="setMode('shared')">Shared tank fill</button>
+      </div>
+
+      <!-- PROJECT (shared by both modes) -->
       <div class="fg">
         <label>Project *</label>
         <select id="f-project" onchange="onProjectChange()"><option value="">— Select project —</option></select>
       </div>
 
-      <!-- FLEET NO -->
-      <div class="fg">
-        <label>Fleet / Machine No *</label>
-        <input type="text" id="f-fleet-input" placeholder="Type fleet no to search..." oninput="filterFleet()" autocomplete="off" autocorrect="off" spellcheck="false">
-        <div id="f-fleet-results" style="background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;display:none;margin-top:4px;margin-bottom:8px"></div>
-        <input type="hidden" id="f-fleet-no">
-      </div>
+      <!-- ═══════════════ SINGLE MACHINE MODE ═══════════════ -->
+      <div id="single-mode-form">
 
-      <!-- MACHINE INFO CARD -->
-      <div class="machine-info" id="machine-info">
-        <div class="machine-info-grid">
-          <div class="info-field"><strong>Type</strong><span id="mi-type">—</span></div>
-          <div class="info-field"><strong>Make / Model</strong><span id="mi-make">—</span></div>
-          <div class="info-field"><strong>Owner</strong><span id="mi-owner">—</span></div>
-          <div class="info-field"><strong>Category</strong><span id="mi-category">—</span></div>
-          <div class="info-field"><strong>Year</strong><span id="mi-year">—</span></div>
-          <div class="info-field"><strong>Tank capacity</strong><span id="mi-cap">—</span></div>
-          <div class="info-field"><strong>Meter type</strong><span id="mi-meter">—</span></div>
+        <!-- FLEET NO -->
+        <div class="fg">
+          <label>Fleet / Machine No *</label>
+          <input type="text" id="f-fleet-input" placeholder="Type fleet no to search..." oninput="filterFleet()" autocomplete="off" autocorrect="off" spellcheck="false">
+          <div id="f-fleet-results" style="background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;display:none;margin-top:4px;margin-bottom:8px"></div>
+          <input type="hidden" id="f-fleet-no">
         </div>
-        <div class="last-fill" id="mi-last" style="display:none"></div>
-      </div>
 
-      <!-- METER READING -->
-      <div class="fg" id="meter-section" style="display:none">
-        <label>Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
-        <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()">
-        <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
-      </div>
-
-      <!-- QUANTITY -->
-      <div class="fg" id="qty-section" style="display:none">
-        <label>Quantity (L) *</label>
-        <input type="number" id="f-qty" min="0" step="0.5" placeholder="0" oninput="onQtyInput()">
-        <div id="qty-warn" style="font-size:12px;color:var(--yellow);margin-top:4px;display:none"></div>
-      </div>
-
-      <!-- TRANSACTION DATE -->
-      <div class="fg" id="txdate-section" style="display:none">
-        <label>Transaction date *</label>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;user-select:none">
-          <input type="checkbox" id="f-samedate" checked onchange="onSameDateToggle()" style="position:absolute;opacity:0;width:0;height:0">
-          <span id="f-samedate-box" style="width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;transition:background .15s,border-color .15s"></span>
-          <span style="font-weight:500;font-size:13px">Same as entry date (today)</span>
-        </label>
+        <!-- MACHINE INFO CARD -->
+        <div class="machine-info" id="machine-info">
+          <div class="machine-info-grid">
+            <div class="info-field"><strong>Type</strong><span id="mi-type">—</span></div>
+            <div class="info-field"><strong>Make / Model</strong><span id="mi-make">—</span></div>
+            <div class="info-field"><strong>Owner</strong><span id="mi-owner">—</span></div>
+            <div class="info-field"><strong>Category</strong><span id="mi-category">—</span></div>
+            <div class="info-field"><strong>Year</strong><span id="mi-year">—</span></div>
+            <div class="info-field"><strong>Tank capacity</strong><span id="mi-cap">—</span></div>
+            <div class="info-field"><strong>Meter type</strong><span id="mi-meter">—</span></div>
+          </div>
+          <div class="last-fill" id="mi-last" style="display:none"></div>
         </div>
-        <input type="date" id="f-tx-date" max="" style="margin-bottom:4px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? Uncheck above to pick a different date.</div>
-      </div>
 
-      <!-- FUEL TYPE -->
-      <div class="fg" id="fuel-section" style="display:none">
-        <label>Fuel type *</label>
-        <div class="fuel-btns">
-          <button type="button" class="fuel-btn active" id="fuel-diesel" onclick="selectFuel('Diesel')">⛽ Diesel</button>
-          <button type="button" class="fuel-btn" id="fuel-petrol91" onclick="selectFuel('Petrol 91')">🔵 Petrol 91</button>
-          <button type="button" class="fuel-btn" id="fuel-petrol95" onclick="selectFuel('Petrol 95')">🟢 Petrol 95</button>
+        <!-- METER READING -->
+        <div class="fg" id="meter-section" style="display:none">
+          <label>Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
+          <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()">
+          <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
         </div>
-        <input type="hidden" id="f-fuel-type" value="Diesel">
+
+        <!-- QUANTITY -->
+        <div class="fg" id="qty-section" style="display:none">
+          <label>Quantity (L) *</label>
+          <input type="number" id="f-qty" min="0" step="0.5" placeholder="0" oninput="onQtyInput()">
+          <div id="qty-warn" style="font-size:12px;color:var(--yellow);margin-top:4px;display:none"></div>
+        </div>
+
+        <!-- TRANSACTION DATE -->
+        <div class="fg" id="txdate-section" style="display:none">
+          <label>Transaction date *</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="f-samedate" checked onchange="onSameDateToggle()" style="position:absolute;opacity:0;width:0;height:0">
+            <span id="f-samedate-box" style="width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;transition:background .15s,border-color .15s"></span>
+            <span style="font-weight:500;font-size:13px">Same as entry date (today)</span>
+          </label>
+          </div>
+          <input type="date" id="f-tx-date" max="" style="margin-bottom:4px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the fuel actually issued? Uncheck above to pick a different date.</div>
+        </div>
+
+        <!-- FUEL TYPE -->
+        <div class="fg" id="fuel-section" style="display:none">
+          <label>Fuel type *</label>
+          <div class="fuel-btns">
+            <button type="button" class="fuel-btn active" id="fuel-diesel" onclick="selectFuel('Diesel')">⛽ Diesel</button>
+            <button type="button" class="fuel-btn" id="fuel-petrol91" onclick="selectFuel('Petrol 91')">🔵 Petrol 91</button>
+            <button type="button" class="fuel-btn" id="fuel-petrol95" onclick="selectFuel('Petrol 95')">🟢 Petrol 95</button>
+          </div>
+          <input type="hidden" id="f-fuel-type" value="Diesel">
+        </div>
+
+        <!-- NOTES -->
+        <div class="fg" id="notes-section" style="display:none">
+          <label>Notes <span class="note-required" id="note-required">* Required</span></label>
+          <textarea id="f-notes" placeholder="Optional — required if quantity exceeds tank capacity" oninput="this.style.borderColor='';this.style.background=''"></textarea>
+        </div>
+
+        <!-- SUBMIT SINGLE -->
+        <button class="submit-btn" id="submit-btn" onclick="doSubmit()" style="display:none" disabled>Record fuel issue</button>
       </div>
 
-      <!-- NOTES -->
-      <div class="fg" id="notes-section" style="display:none">
-        <label>Notes <span class="note-required" id="note-required">* Required</span></label>
-        <textarea id="f-notes" placeholder="Optional — required if quantity exceeds tank capacity" oninput="this.style.borderColor='';this.style.background=''"></textarea>
+      <!-- ═══════════════ SHARED TANK FILL MODE ═══════════════ -->
+      <div id="shared-mode-form" style="display:none">
+
+        <!-- TOTAL QUANTITY -->
+        <div class="fg">
+          <label>Total quantity filled (L) *</label>
+          <input type="number" id="sh-qty" min="0" step="1" placeholder="e.g. 15000" oninput="onShQtyInput()">
+          <div id="sh-qty-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
+        </div>
+
+        <!-- FUEL TYPE -->
+        <div class="fg">
+          <label>Fuel type *</label>
+          <div class="fuel-btns">
+            <button type="button" class="fuel-btn active" id="sh-fuel-diesel" onclick="selectSharedFuel('Diesel')">⛽ Diesel</button>
+            <button type="button" class="fuel-btn" id="sh-fuel-petrol91" onclick="selectSharedFuel('Petrol 91')">🔵 Petrol 91</button>
+            <button type="button" class="fuel-btn" id="sh-fuel-petrol95" onclick="selectSharedFuel('Petrol 95')">🟢 Petrol 95</button>
+          </div>
+          <input type="hidden" id="sh-fuel-type" value="Diesel">
+        </div>
+
+        <!-- TRANSACTION DATE -->
+        <div class="fg">
+          <label>Transaction date *</label>
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="sh-samedate" checked onchange="onShSameDateToggle()" style="position:absolute;opacity:0;width:0;height:0">
+            <span id="sh-samedate-box" style="width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0"></span>
+            <span style="font-weight:500;font-size:13px">Same as entry date (today)</span>
+          </label>
+          <input type="date" id="sh-tx-date" max="" style="margin-bottom:4px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">When was the tank actually filled? Uncheck above to pick a different date.</div>
+        </div>
+
+        <!-- GENERATOR LIST -->
+        <div class="fg">
+          <label>Generators connected to this tank *</label>
+          <input type="text" id="sh-gen-input" placeholder="Type fleet no to add a generator..." oninput="filterSharedGen()" autocomplete="off" autocorrect="off" spellcheck="false">
+          <div id="sh-gen-results" style="background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;display:none;margin-top:4px;margin-bottom:8px"></div>
+          <div id="sh-gen-list" style="margin-top:8px"></div>
+          <div id="sh-gen-empty" style="font-size:12px;color:var(--muted);padding:8px 0">Search above and tap a generator to add it to this fill.</div>
+        </div>
+
+        <!-- PREVIEW -->
+        <div id="sh-preview" style="display:none;background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px">Estimated fuel split (kVA × hours)</div>
+          <div id="sh-preview-rows"></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">* Final split is confirmed server-side after submission.</div>
+        </div>
+
+        <!-- SUBMIT SHARED -->
+        <button class="submit-btn" id="sh-submit-btn" onclick="doSharedSubmit()">Record shared tank fill</button>
       </div>
 
-      <!-- SUBMIT -->
-      <button class="submit-btn" id="submit-btn" onclick="doSubmit()" style="display:none" disabled>Record fuel issue</button>
     </div>
-
-    </div><!-- end desktop-grid -->
 
     <!-- TODAY'S LOG -->
     <div class="card">
       <div class="card-title"><span>📋</span> My entries today</div>
       <div id="history-list"><div class="empty">No entries yet today.</div></div>
     </div>
+
+    </div><!-- end desktop-grid -->
 
     <!-- ADMIN PANEL -->
     <div id="admin-panel" style="display:none">
@@ -452,6 +526,23 @@ const GS_URL = 'https://script.google.com/macros/s/AKfycbxyMnSRej_KLHlcuqNmoqMzx
 let S = { user: null, projects: [], fleet: [], lastReading: {}, users: [], todayLog: [] };
 let selectedFleet = null;
 
+// ── SHARED TANK FILL STATE ────────────────────────────────────────────────────
+let currentMode = 'single';       // 'single' | 'shared'
+let sharedGenerators = [];        // array of { fleetNo, ftype, make, model, owner, category, ratedKva, lastReading }
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('single-mode-form').style.display = mode === 'single' ? 'block' : 'none';
+  document.getElementById('shared-mode-form').style.display = mode === 'shared' ? 'block' : 'none';
+  document.getElementById('mode-single-btn').classList.toggle('active', mode === 'single');
+  document.getElementById('mode-shared-btn').classList.toggle('active', mode === 'shared');
+  clearAlert();
+  if (mode === 'shared') {
+    onShSameDateToggle();
+    renderSharedGenList();
+  }
+}
+
 // ── QATAR TIME ────────────────────────────────────────────────────────────────
 function qNow() { return new Date(new Date().getTime() + (3 * 60 * 60 * 1000)) }
 function qDate() { const d=qNow(); return d.toISOString().slice(0,10) }
@@ -611,6 +702,7 @@ async function startApp() {
     await loadTodayLog();
     buildUI();
     checkAnnouncement();
+    onShSameDateToggle(); // initialise the shared fill date toggle visual state
   } catch(e) {
     setOnline(false);
     showAlert('error', 'Could not load data. Check your connection.');
@@ -676,6 +768,201 @@ function onProjectChange() {
 }
 
 // ── FLEET SEARCH ──────────────────────────────────────────────────────────────
+// ── SHARED TANK FILL FUNCTIONS ────────────────────────────────────────────────
+function selectSharedFuel(ft) {
+  document.getElementById('sh-fuel-type').value = ft;
+  ['Diesel','Petrol 91','Petrol 95'].forEach(f => {
+    const btn = document.getElementById('sh-fuel-' + f.toLowerCase().replace(' ','').replace('91','91').replace('95','95'));
+    const id = 'sh-fuel-' + f.replace(' ','').toLowerCase();
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', f === ft);
+  });
+  // simpler — target by text
+  ['sh-fuel-diesel','sh-fuel-petrol91','sh-fuel-petrol95'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', ['Diesel','Petrol 91','Petrol 95'][i] === ft);
+  });
+}
+function onShSameDateToggle() {
+  const same = document.getElementById('sh-samedate').checked;
+  const box = document.getElementById('sh-samedate-box');
+  const txDateEl = document.getElementById('sh-tx-date');
+  const today = qDate();
+  const minDate = new Date(new Date(today).getTime() - 10*24*60*60*1000).toISOString().slice(0,10);
+  txDateEl.max = today; txDateEl.min = minDate;
+  if (same) {
+    box.textContent = '✓';
+    box.style.background = 'var(--red)'; box.style.border = '2px solid var(--red)'; box.style.color = '#fff';
+    txDateEl.value = today; txDateEl.disabled = true; txDateEl.style.background = '#f4f4f2';
+  } else {
+    box.textContent = '';
+    box.style.background = '#fff'; box.style.border = '2px solid var(--border)'; box.style.color = '';
+    txDateEl.disabled = false; txDateEl.style.background = '';
+  }
+}
+function onShQtyInput() {
+  const qty = parseFloat(document.getElementById('sh-qty').value) || 0;
+  const w = document.getElementById('sh-qty-warn');
+  if (qty > 40000) { w.textContent = '⚠️ Quantity exceeds 40,000 L — please verify.'; w.style.display = 'block'; }
+  else { w.style.display = 'none'; }
+  updateSharedPreview();
+}
+
+function filterSharedGen() {
+  const q = document.getElementById('sh-gen-input').value.toLowerCase().trim();
+  const res = document.getElementById('sh-gen-results');
+  if (!q) { res.style.display = 'none'; return; }
+  // Only show hourmeter machines (generators), not already added
+  const alreadyAdded = sharedGenerators.map(g => g.fleetNo);
+  const matches = S.fleet.filter(f =>
+    f.meterType && ['hourmeter','hrs','hours'].includes(f.meterType.toLowerCase()) &&
+    !alreadyAdded.includes(f.fleetNo) &&
+    (f.fleetNo.toLowerCase().includes(q) || (f.ftype||'').toLowerCase().includes(q) || (f.make||'').toLowerCase().includes(q))
+  ).slice(0, 10);
+  if (!matches.length) { res.style.display = 'none'; return; }
+  res.innerHTML = matches.map(f => `
+    <div onclick="addSharedGen('${f.fleetNo}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #eee;font-size:13px" onmouseover="this.style.background='#f4f4f2'" onmouseout="this.style.background=''">
+      <strong>${f.fleetNo}</strong> <span style="color:var(--muted)">${f.ftype||''} ${f.make||''} ${f.model||''}</span>
+      ${f.ratedKva ? `<span class="gen-row-kva">${f.ratedKva} kVA</span>` : '<span style="color:var(--red);font-size:11px">⚠️ No kVA set</span>'}
+    </div>`).join('');
+  res.style.display = 'block';
+}
+function addSharedGen(fleetNo) {
+  const f = S.fleet.find(x => x.fleetNo === fleetNo);
+  if (!f || sharedGenerators.find(g => g.fleetNo === fleetNo)) return;
+  sharedGenerators.push({ ...f, newReading: '' });
+  document.getElementById('sh-gen-input').value = '';
+  document.getElementById('sh-gen-results').style.display = 'none';
+  renderSharedGenList();
+  updateSharedPreview();
+}
+function removeSharedGen(fleetNo) {
+  sharedGenerators = sharedGenerators.filter(g => g.fleetNo !== fleetNo);
+  renderSharedGenList();
+  updateSharedPreview();
+}
+function renderSharedGenList() {
+  const el = document.getElementById('sh-gen-list');
+  const empty = document.getElementById('sh-gen-empty');
+  if (!sharedGenerators.length) { el.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  el.innerHTML = sharedGenerators.map(g => {
+    const last = S.lastReading[g.fleetNo];
+    const lastStr = last && last.reading ? `Last: ${last.reading.toLocaleString()} hrs` : 'No previous reading';
+    return `<div class="gen-row">
+      <div class="gen-row-info">
+        <div class="gen-row-fleet">${g.fleetNo} <span style="font-weight:400;color:var(--muted);font-size:11px">${g.ftype||''}</span>
+          ${g.ratedKva ? `<span class="gen-row-kva">${g.ratedKva} kVA</span>` : '<span style="color:var(--red);font-size:11px;font-weight:700">⚠️ kVA missing</span>'}
+        </div>
+        <div class="gen-row-meta">${lastStr}</div>
+      </div>
+      <input type="number" class="gen-row-reading" placeholder="New reading (hrs)"
+        value="${g.newReading||''}"
+        onchange="setGenReading('${g.fleetNo}', this.value)"
+        oninput="setGenReading('${g.fleetNo}', this.value)"
+        min="0" style="border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;width:130px">
+      <button class="gen-row-remove" onclick="removeSharedGen('${g.fleetNo}')" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+function setGenReading(fleetNo, val) {
+  const g = sharedGenerators.find(x => x.fleetNo === fleetNo);
+  if (g) g.newReading = val;
+  updateSharedPreview();
+}
+function updateSharedPreview() {
+  const preview = document.getElementById('sh-preview');
+  const rows = document.getElementById('sh-preview-rows');
+  if (!sharedGenerators.length) { preview.style.display = 'none'; return; }
+  const totalQty = parseFloat(document.getElementById('sh-qty').value) || 0;
+  // compute weights
+  const data = sharedGenerators.map(g => {
+    const last = S.lastReading[g.fleetNo];
+    const lastR = (last && last.reading) ? last.reading : 0;
+    const newR = parseFloat(g.newReading) || 0;
+    const hrs = Math.max(0, newR - lastR);
+    const weight = (g.ratedKva || 0) * hrs;
+    return { fleetNo: g.fleetNo, hrs, kva: g.ratedKva||0, weight };
+  });
+  const totalW = data.reduce((s, d) => s + d.weight, 0);
+  let html = data.map(d => {
+    const qty = totalW > 0 ? Math.round((d.weight / totalW) * totalQty) : 0;
+    return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #eee">
+      <span style="color:var(--navy);font-weight:600">${d.fleetNo}</span>
+      <span style="color:var(--muted)">${d.hrs} hrs × ${d.kva} kVA</span>
+      <span style="color:var(--red);font-weight:700">${qty.toLocaleString()} L</span>
+    </div>`;
+  }).join('');
+  rows.innerHTML = html || '<div style="font-size:12px;color:var(--muted)">Enter hourmeter readings to see the estimated split.</div>';
+  preview.style.display = 'block';
+}
+async function doSharedSubmit() {
+  clearAlert();
+  const project = document.getElementById('f-project').value;
+  if (!project) { showAlert('error', 'Please select a project.'); return }
+  const totalQty = parseFloat(document.getElementById('sh-qty').value) || 0;
+  if (!totalQty || totalQty <= 0) { showAlert('error', 'Please enter the total quantity filled.'); return }
+  const txDate = document.getElementById('sh-tx-date').value;
+  if (!txDate) { showAlert('error', 'Transaction date is required.'); return }
+  if (!sharedGenerators.length) { showAlert('error', 'Add at least one generator.'); return }
+  // Check all readings are filled
+  const missing = sharedGenerators.filter(g => g.newReading === '' || g.newReading === null || g.newReading === undefined);
+  if (missing.length) { showAlert('error', 'Please enter the hourmeter reading for: ' + missing.map(g => g.fleetNo).join(', ')); return }
+  // Check kVA
+  const noKva = sharedGenerators.filter(g => !g.ratedKva || g.ratedKva <= 0);
+  if (noKva.length) { showAlert('error', '⚠️ The following generators have no kVA set in the Fleet sheet: ' + noKva.map(g => g.fleetNo).join(', ') + '. Please add Rated Capacity (kVA) before submitting.'); return }
+
+  const btn = document.getElementById('sh-submit-btn');
+  btn.disabled = true;
+  spin('Saving shared tank fill...');
+  try {
+    const payload = {
+      action: 'saveSharedFill',
+      totalQty,
+      fuelType: document.getElementById('sh-fuel-type').value,
+      txDate,
+      entryDate: qDateTime(),
+      operator: S.user.name,
+      project,
+      generators: sharedGenerators.map(g => ({
+        fleetNo: g.fleetNo, ftype: g.ftype||'', make: g.make||'', model: g.model||'',
+        owner: g.owner||'', category: g.category||'',
+        ratedKva: g.ratedKva||0,
+        newReading: parseFloat(g.newReading)||0
+      }))
+    };
+    const result = await api(payload);
+    if (result.error) { showAlert('error', '⚠️ ' + result.message); btn.disabled = false; unspin(); return; }
+    // Update in-memory lastReading for each generator
+    result.results.forEach(r => {
+      S.lastReading[r.fleetNo] = { reading: sharedGenerators.find(g => g.fleetNo === r.fleetNo)?.newReading || 0, date: txDate };
+    });
+    // Add to today's log
+    result.results.forEach(r => {
+      const g = sharedGenerators.find(x => x.fleetNo === r.fleetNo);
+      S.todayLog.unshift({ fleetNo: r.fleetNo, ftype: g?.ftype||'', txDate, entryDate: qDateTime(), project, qty: r.qty, fuelType: payload.fuelType, meterReading: g?.newReading||0, meterUnit:'hrs', notes:'Shared tank fill' });
+    });
+    renderHistory();
+    // Reset shared form
+    sharedGenerators = [];
+    renderSharedGenList();
+    document.getElementById('sh-qty').value = '';
+    document.getElementById('sh-preview').style.display = 'none';
+    document.getElementById('sh-qty-warn').style.display = 'none';
+    onShSameDateToggle();
+    const summary = result.results.map(r => `${r.fleetNo}: ${r.qty.toLocaleString()} L`).join(' · ');
+    showAlert('success', `✓ Shared tank fill recorded — ${totalQty.toLocaleString()} L split across ${result.results.length} generators. ${summary}`);
+  } catch(e) { showAlert('error', 'Save failed: ' + e.message) }
+  btn.disabled = false;
+  unspin();
+}
+
+// ── CLOSE SHARED GENERATOR DROPDOWN ON OUTSIDE CLICK ─────────────────────────
+document.addEventListener('click', e => {
+  if (!e.target.closest('#sh-gen-input') && !e.target.closest('#sh-gen-results'))
+    document.getElementById('sh-gen-results').style.display = 'none';
+});
+
 function filterFleet() {
   const q = document.getElementById('f-fleet-input').value.toLowerCase().trim();
   const res = document.getElementById('f-fleet-results');
@@ -1038,6 +1325,9 @@ function buildUI() {
   const isPMV = role === 'pmv_admin';
   // Admin panel — visible for admin AND pmv_admin
   document.getElementById('admin-panel').style.display = (isAdmin() || isPMV) ? 'block' : 'none';
+  // Shared tank fill is only for PMV Admin + Admin — Data Entry users see single mode only
+  const modeToggle = document.getElementById('mode-toggle');
+  if (modeToggle) modeToggle.style.display = (isAdmin() || isPMV) ? 'flex' : 'none';
   // Announcement management — Admin only
   const annCard = document.getElementById('announcement-mgmt-card');
   if (annCard) annCard.style.display = isAdmin() ? 'block' : 'none';
