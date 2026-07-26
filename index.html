@@ -252,11 +252,20 @@ document.head.appendChild(link);
           <div class="last-fill" id="mi-last" style="display:none"></div>
         </div>
 
-        <!-- METER READING -->
+        <!-- METER READING + SECONDARY METER — two column row -->
         <div class="fg" id="meter-section" style="display:none">
-          <label>Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
-          <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()">
-          <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
+          <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px">
+              <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
+              <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()" style="width:100%">
+              <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
+            </div>
+            <div id="secondary-meter-section" style="flex:1;min-width:140px;display:none">
+              <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Odometer (km) <span style="font-weight:400;font-size:11px">optional</span></label>
+              <input type="number" id="f-secondary-reading" min="0" placeholder="e.g. 45230" oninput="onSecondaryMeterInput()" style="width:100%">
+              <div id="secondary-meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
+            </div>
+          </div>
         </div>
 
         <!-- QUANTITY -->
@@ -289,13 +298,6 @@ document.head.appendChild(link);
             <button type="button" class="fuel-btn" id="fuel-petrol95" onclick="selectFuel('Petrol 95')">🟢 Petrol 95</button>
           </div>
           <input type="hidden" id="f-fuel-type" value="Diesel">
-        </div>
-
-        <!-- SECONDARY METER READING (optional — only for dual-meter machines) -->
-        <div class="fg" id="secondary-meter-section" style="display:none">
-          <label>Odometer (km) <span style="font-weight:400;color:var(--muted);font-size:11px">— optional, for reference only</span></label>
-          <input type="number" id="f-secondary-reading" min="0" placeholder="e.g. 45230" oninput="onSecondaryMeterInput()">
-          <div id="secondary-meter-warn" style="font-size:12px;color:var(--muted);margin-top:4px;display:none"></div>
         </div>
 
         <!-- NOTES -->
@@ -1024,6 +1026,7 @@ function resetMachine() {
   document.getElementById('secondary-meter-section').style.display = 'none';
   document.getElementById('notes-section').style.display = 'none';
   document.getElementById('f-secondary-reading').value = '';
+  document.getElementById('f-secondary-reading').style.borderColor = '';
   document.getElementById('secondary-meter-warn').style.display = 'none';
   document.getElementById('submit-btn').style.display = 'none';
   document.getElementById('submit-btn').disabled = true;
@@ -1069,7 +1072,7 @@ function showMachineInfo(f) {
   document.getElementById('fuel-section').style.display = 'block';
   // Show secondary KM reading field only if this machine has a secondary meter
   const secSection = document.getElementById('secondary-meter-section');
-  secSection.style.display = f.secondaryMeter === 'km' ? 'block' : 'none';
+  secSection.style.display = f.secondaryMeter === 'km' ? 'flex' : 'none';
   if (f.secondaryMeter !== 'km') document.getElementById('f-secondary-reading').value = '';
   document.getElementById('notes-section').style.display = 'block';
   // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
@@ -1094,11 +1097,13 @@ function onSecondaryMeterInput() {
   const lastKm = (last && last.secondaryReading) ? last.secondaryReading : 0;
   const warnEl = document.getElementById('secondary-meter-warn');
   if (val && lastKm && val < lastKm) {
-    warnEl.textContent = `ℹ️ KM reading is lower than last recorded (${lastKm.toLocaleString()} km) — leave blank if unsure.`;
+    warnEl.textContent = `⚠️ Odometer reading must be higher than last recorded (${lastKm.toLocaleString()} km). Correct it or leave blank.`;
     warnEl.style.display = 'block';
-    warnEl.style.color = 'var(--muted)';
+    warnEl.style.color = 'var(--red)';
+    document.getElementById('f-secondary-reading').style.borderColor = 'var(--red)';
   } else {
     warnEl.style.display = 'none';
+    document.getElementById('f-secondary-reading').style.borderColor = '';
   }
 }
 function onSameDateToggle() {
@@ -1184,6 +1189,20 @@ async function doSubmit() {
   if (!meter || meter <= 0) { showAlert('error', 'Please enter the meter reading.'); return }
 
   if (!qty || qty <= 0) { showAlert('error', 'Please enter the quantity.'); return }
+
+  // Secondary meter validation — only if entered and machine has secondary meter
+  if (selectedFleet.secondaryMeter === 'km') {
+    const secVal = parseFloat(document.getElementById('f-secondary-reading').value);
+    if (secVal) {
+      const last = S.lastReading[fleetNo];
+      const lastKm = (last && last.secondaryReading) ? last.secondaryReading : 0;
+      if (lastKm && secVal < lastKm) {
+        showAlert('error', `Odometer reading (${secVal.toLocaleString()} km) cannot be lower than the last recorded reading (${lastKm.toLocaleString()} km). Correct it or leave blank.`);
+        document.getElementById('f-secondary-reading').focus();
+        return;
+      }
+    }
+  }
 
   // Check capacity
   const cap = selectedFleet.tankCap || 0;
