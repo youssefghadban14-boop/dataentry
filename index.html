@@ -291,6 +291,13 @@ document.head.appendChild(link);
           <input type="hidden" id="f-fuel-type" value="Diesel">
         </div>
 
+        <!-- SECONDARY METER READING (optional — only for dual-meter machines) -->
+        <div class="fg" id="secondary-meter-section" style="display:none">
+          <label>Odometer (km) <span style="font-weight:400;color:var(--muted);font-size:11px">— optional, for reference only</span></label>
+          <input type="number" id="f-secondary-reading" min="0" placeholder="e.g. 45230" oninput="onSecondaryMeterInput()">
+          <div id="secondary-meter-warn" style="font-size:12px;color:var(--muted);margin-top:4px;display:none"></div>
+        </div>
+
         <!-- NOTES -->
         <div class="fg" id="notes-section" style="display:none">
           <label>Notes <span class="note-required" id="note-required">* Required</span></label>
@@ -456,6 +463,12 @@ document.head.appendChild(link);
         <div class="fg"><label>Year</label><input id="eq-year" type="number" min="1990" max="2030" placeholder="e.g. 2020"></div>
         <div class="fg"><label>Tank Capacity (L)</label><input id="eq-cap" type="number" min="0" placeholder="e.g. 400"></div>
         <div class="fg"><label>Meter Type</label><select id="eq-mtype"><option value="hourmeter">Hourmeter (hrs)</option><option value="odometer">Odometer (km)</option></select></div>
+        <div class="fg"><label>Secondary Meter <span style="font-weight:400;color:var(--muted);font-size:11px">— for machines with both hourmeter and odometer (e.g. cranes, boom trucks)</span></label>
+          <select id="eq-secondary-meter">
+            <option value="">None</option>
+            <option value="km">Odometer (km)</option>
+          </select>
+        </div>
         <div class="fg"><label>Owner name</label>
           <input id="eq-owner" type="text" placeholder="e.g. Al-Samah Est., C.A.T., Mas Power..." list="eq-owner-list" autocomplete="off">
           <datalist id="eq-owner-list"></datalist>
@@ -932,7 +945,10 @@ async function doSharedSubmit() {
       })))
     };
     const result = await api(payload);
-    if (result.error) { showAlert('error', '⚠️ ' + result.message); btn.disabled = false; unspin(); return; }
+    if (result.error) {
+      showAlert('error', '⚠️ ' + (result.message || (result.error === 'Unknown action: saveSharedFill' ? 'The Apps Script needs to be redeployed — please contact your administrator.' : result.error)));
+      btn.disabled = false; unspin(); return;
+    }
     // Update in-memory lastReading for each generator
     result.results.forEach(r => {
       S.lastReading[r.fleetNo] = { reading: sharedGenerators.find(g => g.fleetNo === r.fleetNo)?.newReading || 0, date: txDate };
@@ -1005,7 +1021,10 @@ function resetMachine() {
   document.getElementById('qty-section').style.display = 'none';
   document.getElementById('txdate-section').style.display = 'none';
   document.getElementById('fuel-section').style.display = 'none';
+  document.getElementById('secondary-meter-section').style.display = 'none';
   document.getElementById('notes-section').style.display = 'none';
+  document.getElementById('f-secondary-reading').value = '';
+  document.getElementById('secondary-meter-warn').style.display = 'none';
   document.getElementById('submit-btn').style.display = 'none';
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('f-meter').value = '';
@@ -1013,6 +1032,7 @@ function resetMachine() {
   document.getElementById('f-notes').value = '';
   document.getElementById('f-tx-date').value = '';
   document.getElementById('f-samedate').checked = true;
+  document.getElementById('f-secondary-reading').value = '';
   selectFuel('Diesel');
   document.getElementById('qty-warn').style.display = 'none';
   document.getElementById('note-required').style.display = 'none';
@@ -1035,7 +1055,9 @@ function showMachineInfo(f) {
   const last = S.lastReading[f.fleetNo];
   const lastEl = document.getElementById('mi-last');
   if (last && last.reading) {
-    lastEl.innerHTML = `📅 Last fill: <strong>${fmt(last.date)}</strong> &nbsp;·&nbsp; Meter: <strong>${last.reading.toLocaleString()} ${unit}</strong>`;
+    const kmInfo = (f.secondaryMeter === 'km' && last.secondaryReading)
+      ? ` &nbsp;·&nbsp; Odo: <strong>${last.secondaryReading.toLocaleString()} km</strong>` : '';
+    lastEl.innerHTML = `📅 Last fill: <strong>${fmt(last.date)}</strong> &nbsp;·&nbsp; Meter: <strong>${last.reading.toLocaleString()} ${unit}</strong>${kmInfo}`;
     lastEl.style.display = 'block';
   } else {
     lastEl.innerHTML = '📅 No previous fill recorded for this machine.';
@@ -1045,6 +1067,10 @@ function showMachineInfo(f) {
   document.getElementById('meter-section').style.display = 'block';
   document.getElementById('qty-section').style.display = 'block';
   document.getElementById('fuel-section').style.display = 'block';
+  // Show secondary KM reading field only if this machine has a secondary meter
+  const secSection = document.getElementById('secondary-meter-section');
+  secSection.style.display = f.secondaryMeter === 'km' ? 'block' : 'none';
+  if (f.secondaryMeter !== 'km') document.getElementById('f-secondary-reading').value = '';
   document.getElementById('notes-section').style.display = 'block';
   // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
   const txDateEl = document.getElementById('f-tx-date');
@@ -1061,7 +1087,20 @@ function showMachineInfo(f) {
   document.getElementById('submit-btn').disabled = false;
 }
 
-// ── SAME AS ENTRY DATE TOGGLE ─────────────────────────────────────────────────
+function onSecondaryMeterInput() {
+  if (!selectedFleet || selectedFleet.secondaryMeter !== 'km') return;
+  const val = parseFloat(document.getElementById('f-secondary-reading').value);
+  const last = S.lastReading[selectedFleet.fleetNo];
+  const lastKm = (last && last.secondaryReading) ? last.secondaryReading : 0;
+  const warnEl = document.getElementById('secondary-meter-warn');
+  if (val && lastKm && val < lastKm) {
+    warnEl.textContent = `ℹ️ KM reading is lower than last recorded (${lastKm.toLocaleString()} km) — leave blank if unsure.`;
+    warnEl.style.display = 'block';
+    warnEl.style.color = 'var(--muted)';
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
 function onSameDateToggle() {
   const same = document.getElementById('f-samedate').checked;
   const box = document.getElementById('f-samedate-box');
@@ -1191,6 +1230,7 @@ async function doSubmit() {
     meterUnit: isOdo ? 'km' : 'hrs',
     qty,
     fuelType,
+    secondaryReading: selectedFleet.secondaryMeter === 'km' ? document.getElementById('f-secondary-reading').value : '',
     notes,
     warning
   };
@@ -1233,7 +1273,8 @@ async function doSubmit() {
       return;
     }
     // Update lastReading in memory
-    S.lastReading[fleetNo] = { reading: meter, date: tx.entryDate };
+    S.lastReading[fleetNo] = { reading: meter, date: tx.entryDate,
+      secondaryReading: tx.secondaryReading ? parseFloat(tx.secondaryReading)||0 : (S.lastReading[fleetNo]?.secondaryReading || 0) };
     // Add to today's log
     S.todayLog.unshift(tx);
     renderHistory();
@@ -1689,6 +1730,7 @@ function openAddEquipment() {
   document.getElementById('eq-year').value = '';
   document.getElementById('eq-cap').value = '';
   document.getElementById('eq-mtype').value = 'hourmeter';
+  document.getElementById('eq-secondary-meter').value = '';
   document.getElementById('eq-owner').value = '';
   document.getElementById('eq-category').value = '';
   document.getElementById('eq-status').value = 'Active';
@@ -1708,6 +1750,7 @@ function editEquipment(fleetNo) {
   document.getElementById('eq-year').value = f.year || '';
   document.getElementById('eq-cap').value = f.tankCap || '';
   document.getElementById('eq-mtype').value = f.meterType || 'hourmeter';
+  document.getElementById('eq-secondary-meter').value = f.secondaryMeter || '';
   document.getElementById('eq-owner').value = f.owner || '';
   document.getElementById('eq-category').value = f.category || '';
   document.getElementById('eq-status').value = f.status || 'Active';
@@ -1727,6 +1770,7 @@ async function saveEquipment() {
     year: document.getElementById('eq-year').value || '',
     tankCap: parseFloat(document.getElementById('eq-cap').value) || 0,
     meterType: document.getElementById('eq-mtype').value,
+    secondaryMeter: document.getElementById('eq-secondary-meter').value,
     owner: document.getElementById('eq-owner').value.trim(),
     category: document.getElementById('eq-category').value,
     status: document.getElementById('eq-status').value
