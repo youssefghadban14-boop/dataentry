@@ -254,15 +254,15 @@ document.head.appendChild(link);
 
         <!-- METER READING + SECONDARY METER — two column row -->
         <div class="fg" id="meter-section" style="display:none">
-          <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
             <div style="flex:1;min-width:140px">
-              <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
-              <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()" style="width:100%">
+              <label>Meter reading <span id="meter-unit-label">(hrs)</span> *</label>
+              <input type="number" id="f-meter" min="0" placeholder="0" oninput="onMeterInput()">
               <div id="meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
             </div>
             <div id="secondary-meter-section" style="flex:1;min-width:140px;display:none">
-              <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Odometer (km) <span style="font-weight:400;font-size:11px">optional</span></label>
-              <input type="number" id="f-secondary-reading" min="0" placeholder="e.g. 45230" oninput="onSecondaryMeterInput()" style="width:100%">
+              <label>Odometer (km) <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted)">— optional</span></label>
+              <input type="number" id="f-secondary-reading" min="0" placeholder="0" oninput="onSecondaryMeterInput()">
               <div id="secondary-meter-warn" style="font-size:12px;color:var(--red);margin-top:4px;display:none"></div>
             </div>
           </div>
@@ -1072,7 +1072,7 @@ function showMachineInfo(f) {
   document.getElementById('fuel-section').style.display = 'block';
   // Show secondary KM reading field only if this machine has a secondary meter
   const secSection = document.getElementById('secondary-meter-section');
-  secSection.style.display = f.secondaryMeter === 'km' ? 'flex' : 'none';
+  secSection.style.display = f.secondaryMeter === 'km' ? 'block' : 'none';
   if (f.secondaryMeter !== 'km') document.getElementById('f-secondary-reading').value = '';
   document.getElementById('notes-section').style.display = 'block';
   // Set transaction date: default today, min = 10 days ago, max = today (Qatar time)
